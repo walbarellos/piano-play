@@ -177,13 +177,13 @@ int main(int, char*[]) {
     MidiImporter midiImporter;
     struct SongEntry { std::string file, title, composer; };
     const std::vector<SongEntry> kSongs = {
-        {"assets/songs/parabens_pra_voce.mid",        "Parabéns Pra Você",              "Tradicional"},
-        {"assets/songs/beethoven_ode_to_joy.mid",     "Ode to Joy",                     "L.v. Beethoven"},
-        {"assets/songs/beethoven_fur_elise.mid",      "Für Elise",                      "L.v. Beethoven"},
-        {"assets/songs/mozart_alla_turca.mid",        "Rondo Alla Turca",               "W.A. Mozart"},
-        {"assets/songs/chopin_prelude_op28_no4.mid",   "Prelude Op.28 No.4",            "F. Chopin"},
-        {"assets/songs/chopin_ballade_no1_op23.mid",   "Ballade No. 1 in G Minor Op. 23","F. Chopin"},
-        {"assets/songs/beethoven_kreutzer_sonata.mid", "Sonata 'Kreutzer' Op. 47",      "L.v. Beethoven"},
+        {"assets/songs/parabens_pra_voce.mid",          "Parabéns Pra Você",                                "Tradicional"},
+        {"assets/songs/beethoven_ode_to_joy.mid",       "Ode to Joy",                                       "L.v. Beethoven"},
+        {"assets/songs/beethoven_fur_elise.mid",        "Für Elise",                                        "L.v. Beethoven"},
+        {"assets/songs/shigatsu_chopin_ballade_op23.mid","Ballade No. 1 in G Minor (Piano & Violin ver.)",  "Shigatsu wa Kimi no Uso / Chopin"},
+        {"assets/songs/shigatsu_beethoven_kreutzer.mid","Sonata No. 9 in A 'Kreutzer' Op. 47",             "Shigatsu wa Kimi no Uso / Beethoven"},
+        {"assets/songs/mozart_alla_turca.mid",          "Rondo Alla Turca",                                 "W.A. Mozart"},
+        {"assets/songs/chopin_prelude_op28_no4.mid",     "Prelude Op. 28 No. 4",                            "F. Chopin"},
     };
     for (const auto& e : kSongs) {
         auto res = midiImporter.importFromFile(e.file);

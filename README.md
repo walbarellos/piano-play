@@ -43,10 +43,10 @@ ctest --test-dir build --output-on-failure
 - **F2**: *Parabéns Pra Você* (Tutorial)
 - **F3**: *Beethoven - Ode to Joy (Hino à Alegria)*
 - **F4**: *Beethoven - Für Elise*
-- **F5**: *Mozart - Rondo Alla Turca*
-- **F6**: *Chopin - Prelude Op. 28 No. 4*
-- **F7**: *Chopin - Ballade No. 1 in G Minor, Op. 23*
-- **F8**: *Beethoven - Sonata 'Kreutzer', Op. 47*
+- **F5**: *Shigatsu wa Kimi no Uso - Chopin's Ballade No. 1 in G Minor, Op. 23 (Piano with Violin ver.)*
+- **F6**: *Shigatsu wa Kimi no Uso - Beethoven Violin Sonata No. 9 in A 'Kreutzer', Op. 47*
+- **F7**: *Mozart - Rondo Alla Turca*
+- **F8**: *Chopin - Prelude Op. 28 No. 4*
 - **TAB**: Alternar para a próxima canção
 - **F12**: **Modo DEMO Automático** (a máquina demonstra a música com execução perfeita)
 
