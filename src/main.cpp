@@ -177,11 +177,13 @@ int main(int, char*[]) {
     MidiImporter midiImporter;
     struct SongEntry { std::string file, title, composer; };
     const std::vector<SongEntry> kSongs = {
-        {"assets/songs/parabens_pra_voce.mid",     "Parabéns Pra Você",         "Tradicional"},
-        {"assets/songs/beethoven_ode_to_joy.mid",  "Ode to Joy",                "L.v. Beethoven"},
-        {"assets/songs/beethoven_fur_elise.mid",   "Für Elise",                 "L.v. Beethoven"},
-        {"assets/songs/mozart_alla_turca.mid",     "Rondo Alla Turca",          "W.A. Mozart"},
-        {"assets/songs/chopin_prelude_op28_no4.mid","Prelude Op.28 No.4",       "F. Chopin"},
+        {"assets/songs/parabens_pra_voce.mid",        "Parabéns Pra Você",              "Tradicional"},
+        {"assets/songs/beethoven_ode_to_joy.mid",     "Ode to Joy",                     "L.v. Beethoven"},
+        {"assets/songs/beethoven_fur_elise.mid",      "Für Elise",                      "L.v. Beethoven"},
+        {"assets/songs/mozart_alla_turca.mid",        "Rondo Alla Turca",               "W.A. Mozart"},
+        {"assets/songs/chopin_prelude_op28_no4.mid",   "Prelude Op.28 No.4",            "F. Chopin"},
+        {"assets/songs/chopin_ballade_no1_op23.mid",   "Ballade No. 1 in G Minor Op. 23","F. Chopin"},
+        {"assets/songs/beethoven_kreutzer_sonata.mid", "Sonata 'Kreutzer' Op. 47",      "L.v. Beethoven"},
     };
     for (const auto& e : kSongs) {
         auto res = midiImporter.importFromFile(e.file);
@@ -418,6 +420,8 @@ int main(int, char*[]) {
                 else if (sym==SDLK_F4) { currentMode=GameMode::SongMode; activeSongIndex=2; reloadChart(); }
                 else if (sym==SDLK_F5) { currentMode=GameMode::SongMode; activeSongIndex=3; reloadChart(); }
                 else if (sym==SDLK_F6) { currentMode=GameMode::SongMode; activeSongIndex=4; reloadChart(); }
+                else if (sym==SDLK_F7) { currentMode=GameMode::SongMode; activeSongIndex=5; reloadChart(); }
+                else if (sym==SDLK_F8) { currentMode=GameMode::SongMode; activeSongIndex=6; reloadChart(); }
                 else if (sym==SDLK_F12) {
                     // Toggle DEMO MODE — a máquina toca automaticamente
                     demoMode = !demoMode;
@@ -916,7 +920,7 @@ int main(int, char*[]) {
         if (currentMode==GameMode::FreePlay) {
             renderText(ren, fontMedium, "♪  FREE PLAY — Toque Livre", 18, 6, {100,200,255,255});
             renderText(ren, fontSmall,
-                "[F2-F6] Músicas  [1/2/3] Dificuldade  [TAB] Próxima  [F1] Song Mode  [ESC] Sair",
+                "[F2-F8] Músicas  [1/2/3] Dificuldade  [TAB] Próxima  [F1] Song Mode  [ESC] Sair",
                 18, 34, {100,120,165,255});
         } else {
             const Song& song = getActiveSong();
@@ -941,7 +945,7 @@ int main(int, char*[]) {
 
             // Linha 3 (menor): Navegação compacta — abaixo do compositor, restrita à metade esquerda
             std::ostringstream nav;
-            nav << "[F2-F6] Musica  [1/2/3] Dif  [TAB] Prox  [-/+] Queda:"
+            nav << "[F2-F8] Musica  [1/2/3] Dif  [TAB] Prox  [-/+] Queda:"
                 << std::fixed << std::setprecision(1) << lookahead << "s  [Enter] Reiniciar  [F12] DEMO";
             renderText(ren, fontTiny, nav.str(), 18, 48, {80,95,145,200});
         }

@@ -45,6 +45,8 @@ ctest --test-dir build --output-on-failure
 - **F4**: *Beethoven - Für Elise*
 - **F5**: *Mozart - Rondo Alla Turca*
 - **F6**: *Chopin - Prelude Op. 28 No. 4*
+- **F7**: *Chopin - Ballade No. 1 in G Minor, Op. 23*
+- **F8**: *Beethoven - Sonata 'Kreutzer', Op. 47*
 - **TAB**: Alternar para a próxima canção
 - **F12**: **Modo DEMO Automático** (a máquina demonstra a música com execução perfeita)
 
