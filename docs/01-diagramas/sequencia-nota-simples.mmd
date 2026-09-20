@@ -1,0 +1,22 @@
+sequenceDiagram
+    actor Player
+    participant KM as KeyboardManager
+    participant Mapper as KeyboardMapper
+    participant FP as FreePlayController
+    participant PE as PianoEngine
+    participant AD as AudioDevice
+
+    Player->>KM: keydown('a')
+    KM->>Mapper: noteForKey('a')
+    Mapper-->>KM: Note{C4, 261.63Hz}
+    KM->>FP: noteOn(Note)
+    FP->>PE: noteOn(Note)
+    PE->>AD: play(sample/synth, freq=261.63)
+    AD-->>Player: som
+
+    Player->>KM: keyup('a')
+    KM->>Mapper: noteForKey('a')
+    Mapper-->>KM: Note{C4}
+    KM->>FP: noteOff(Note)
+    FP->>PE: noteOff(Note)
+    PE->>AD: release(voice)

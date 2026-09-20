@@ -1,0 +1,90 @@
+classDiagram
+    class Note {
+        +int midi
+        +double frequency
+        +string name
+    }
+
+    class NoteEvent {
+        +double timestamp
+        +int midiNote
+        +double duration
+        +uint8 velocity
+        +int voice
+    }
+
+    class ChordGroup {
+        +double onset
+        +NoteEvent[] noteEvents
+    }
+
+    class Song {
+        +string id
+        +string title
+        +string composer
+        +double bpm
+        +double durationSeconds
+        +ChordGroup[] chordGroups
+    }
+
+    class Difficulty {
+        +string name
+        +HitWindow hitWindow
+        +int maxChordSize
+        +float noteDensityFactor
+        +bool allowPartialChord
+    }
+
+    class PlayableChordGroup {
+        +double onset
+        +char[] keys
+        +ChordGroup originalChordGroup
+    }
+
+    class Chart {
+        +string songId
+        +Difficulty difficulty
+        +PlayableChordGroup[] playableEvents
+    }
+
+    class Judgement {
+        +string type
+        +double deltaMs
+    }
+
+    class ScoreRecord {
+        +string chartId
+        +string profileId
+        +float accuracy
+        +int maxCombo
+        +string grade
+        +datetime playedAt
+    }
+
+    class PlayerSettings {
+        +float volume
+        +int audioBufferSize
+        +map keyBindings
+    }
+
+    class PlayerProfile {
+        +string id
+        +string name
+        +string[] unlockedSongs
+        +PlayerSettings settings
+    }
+
+    class SaveGame {
+        +int version
+        +PlayerProfile profile
+        +ScoreRecord[] scores
+    }
+
+    Song "1" --> "*" ChordGroup
+    ChordGroup "1" --> "*" NoteEvent
+    Chart "1" --> "*" PlayableChordGroup
+    Chart --> Difficulty
+    PlayableChordGroup --> ChordGroup : originalChordGroup
+    SaveGame --> PlayerProfile
+    SaveGame "1" --> "*" ScoreRecord
+    PlayerProfile --> PlayerSettings

@@ -1,0 +1,28 @@
+sequenceDiagram
+    actor Player
+    participant SM as SongModeController
+    participant JE as JudgementEngine
+    participant SE as ScoringEngine
+
+    Note over SM: PlayableChordGroup esperado: {S, D, G} onset=12.400s
+
+    Player->>SM: keydown('s') @12.410s
+    SM->>JE: registerInput('s', t=12.410s)
+    Player->>SM: keydown('d') @12.435s
+    SM->>JE: registerInput('d', t=12.435s)
+    Player->>SM: keydown('g') @12.500s
+
+    Note over JE: 'g' fora da hitWindow ou falhou por ghosting (RF18 / ADR-11)
+    alt Dificuldade com allowPartialChord == true (Easy)
+        JE->>JE: Teclas {S, D} acertaram dentro da janela<br/>(acerto parcial permitido no Easy)
+        JE-->>SM: Judgement{Good, chord parcial}
+        SM->>SE: registerJudgement(Good)
+        SE-->>SM: combo mantido (+1)
+    else Dificuldades estritas (Hard / Expert)
+        JE->>JE: nem todas as teclas do grupo foram<br/>pressionadas dentro da janela
+        JE-->>SM: Judgement{Miss, chord incompleto}
+        SM->>SE: registerJudgement(Miss)
+        SE-->>SM: combo zerado
+    end
+
+    Note over JE: se TODAS as teclas do grupo chegarem<br/>dentro da janela, Judgement = pior caso<br/>individual (ex.: 1 Great + 2 Perfect → Great)

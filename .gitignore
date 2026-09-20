@@ -1,0 +1,28 @@
+# Build artifacts
+build/
+bin/
+lib/
+*.o
+*.a
+*.so
+*.dylib
+*.exe
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# Runtime / Savegames
+abntpiano_save.json
+
+# Archives
+docs.zip
+
+# IDE & OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store

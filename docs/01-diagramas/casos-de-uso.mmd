@@ -1,0 +1,17 @@
+graph LR
+    Player((Jogador))
+    System((Sistema))
+
+    Player --> UC01[UC01 Tocar Free Play]
+    Player --> UC02[UC02 Alterar oitava]
+    Player --> UC05[UC05 Jogar peça]
+    Player --> UC08[UC08 Selecionar dificuldade]
+
+    System --> UC03[UC03 Importar peça]
+    System --> UC04[UC04 Gerar Chart]
+    System --> UC06[UC06 Salvar progresso]
+    System --> UC07[UC07 Carregar progresso]
+
+    UC05 -.include.-> UC04
+    UC08 -.include.-> UC04
+    UC05 -.include.-> UC06

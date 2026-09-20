@@ -1,0 +1,11 @@
+flowchart LR
+    A[Arquivo .mid] --> B[MidiParser<br/>lê tracks/eventos brutos]
+    B --> C{Arquivo válido?}
+    C -- não --> D[Erro reportado<br/>RF11]
+    C -- sim --> E[Extrair NoteOn/NoteOff<br/>por track]
+    E --> F[Converter para NoteEvent[]<br/>timestamp, midiNote, duration, velocity]
+    F --> G[Agrupar por janela de<br/>simultaneidade RNF03]
+    G --> H[ChordGroup[]]
+    H --> I[Extrair metadados<br/>título, compositor, bpm]
+    I --> J[Song normalizada<br/>RF09]
+    J --> K[Adicionar ao catálogo<br/>de peças]

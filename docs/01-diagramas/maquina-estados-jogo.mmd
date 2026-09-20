@@ -1,0 +1,26 @@
+stateDiagram-v2
+    [*] --> Loading
+    Loading --> MainMenu : SaveGame carregado (UC07)
+
+    MainMenu --> FreePlay : selecionar Free Play (UC01)
+    MainMenu --> SongSelect : selecionar Song Select
+    MainMenu --> Settings
+
+    FreePlay --> MainMenu : ESC
+
+    SongSelect --> SongSelect : navegar / selecionar dificuldade (UC08)
+    SongSelect --> ChartLoading : confirmar (UC04)
+    SongSelect --> MainMenu : ESC
+
+    ChartLoading --> Playing : Chart pronto (cache ou gerado)
+
+    Playing --> Paused : pausar (RF19)
+    Paused --> Playing : retomar
+    Paused --> SongSelect : abandonar (sem salvar score)
+
+    Playing --> Results : peça concluída
+    Results --> SaveProgress : salvar (UC06)
+    SaveProgress --> SongSelect
+    Results --> SongSelect : sem salvar (fluxo raro/erro)
+
+    Settings --> MainMenu

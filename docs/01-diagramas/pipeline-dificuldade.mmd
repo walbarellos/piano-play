@@ -1,0 +1,14 @@
+flowchart LR
+    A[Song] --> B[ChartGenerator]
+    P[Difficulty params<br/>hitWindow, maxChordSize,<br/>noteDensityFactor,<br/>allowPartialChord] --> B
+
+    B --> C{ChordGroup cabe em<br/>maxChordSize?}
+    C -- não --> D[Reduzir grupo<br/>ADR-03: prioriza nota de<br/>maior duração/velocity]
+    C -- sim --> E[Mantém grupo completo]
+    D --> F
+    E --> F[Aplicar noteDensityFactor<br/>descarta grupos secundários]
+
+    F --> G[Mapear notas às 26 teclas<br/>via KeyboardMapper +<br/>transposição de oitava]
+    G --> H[PlayableChordGroup[]]
+    H --> I[Chart]
+    I --> J[ChartCache<br/>ADR-06]

@@ -1,0 +1,67 @@
+graph TD
+    subgraph Input["Input Layer"]
+        KM[KeyboardManager]
+        KMap[KeyboardMapper]
+    end
+
+    subgraph Pipeline["Content Pipeline"]
+        MI[MidiImporter]
+    end
+
+    subgraph Domain["Music Domain"]
+        Song[Song]
+        Note[Note / NoteEvent / ChordGroup]
+    end
+
+    subgraph ChartLayer["Chart Layer"]
+        CG[ChartGenerator]
+        CC[ChartCache]
+    end
+
+    subgraph GameLayer["Game Layer"]
+        FP[FreePlayController]
+        SM[SongModeController]
+        JE[JudgementEngine]
+        SE[ScoringEngine]
+    end
+
+    subgraph AudioLayer["Audio Layer"]
+        PE[PianoEngine]
+        SampleE[SampleEngine]
+        SynthE[SynthEngine]
+        AD[AudioDevice]
+    end
+
+    subgraph Persist["Persistence Layer"]
+        SGR[SaveGameRepository]
+    end
+
+    subgraph UI["UI Layer"]
+        R[Renderer / HUD]
+    end
+
+    MI --> Song
+    Song --> CG
+    CG --> CC
+    CC --> SM
+
+    KM --> KMap
+    KMap --> FP
+    KMap --> SM
+
+    FP --> PE
+    SM --> JE
+    JE --> SE
+    SM --> PE
+
+    PE --> SampleE
+    PE --> SynthE
+    SampleE --> AD
+    SynthE --> AD
+
+    SE --> SGR
+    SGR --> UI
+
+    FP --> R
+    SM --> R
+    SE --> R
