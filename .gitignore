@@ -18,7 +18,7 @@ Makefile
 abntpiano_save.json
 
 # Archives
-docs.zip
+*.zip
 
 # IDE & OS
 .vscode/

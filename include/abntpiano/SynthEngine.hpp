@@ -11,7 +11,7 @@ namespace abntpiano {
 // Sintetizador polifônico com envelope ADSR (RF03, RF04, RF05, ADR-02)
 class SynthEngine {
 public:
-    static constexpr size_t kMaxVoices = 16;
+    static constexpr size_t kMaxVoices = 64;
 
     explicit SynthEngine(double sampleRate = 44100.0)
         : sampleRate_(sampleRate) {
@@ -46,18 +46,17 @@ public:
             }
         }
 
-        // Se todas ativas, rouba a voz em release mais adiantada
+        // Se todas ativas, rouba a voz mais silenciosa (prioriza as em Release)
         if (!target) {
-            double lowestEnv = 2.0;
+            double lowestScore = 1e9;
             for (auto& v : voices_) {
-                if (v.state == Voice::State::Release && v.envelope < lowestEnv) {
-                    lowestEnv = v.envelope;
-                    target = &v;
-                }
+                double score = v.envelope * v.velocity;
+                if (v.state == Voice::State::Release) score *= 0.25;
+                if (score < lowestScore) { lowestScore = score; target = &v; }
             }
         }
 
-        if (!target) target = &voices_[0]; // fallback voz mais antiga
+        if (!target) target = &voices_[0];
 
         target->active = true;
         target->midiNote = midiNote;
@@ -181,7 +180,7 @@ public:
                                 std::sin(v.phase * 2.0) * 0.2 +
                                 std::sin(v.phase * 3.0) * 0.1;
                 
-                buffer[i] += static_cast<float>(sample * v.envelope * v.velocity * 0.25);
+                buffer[i] += static_cast<float>(sample * v.envelope * v.velocity * 0.16);
 
                 v.phase += phaseIncrement;
                 if (v.phase >= 2.0 * M_PI) {

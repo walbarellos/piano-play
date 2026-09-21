@@ -177,13 +177,14 @@ int main(int, char*[]) {
     MidiImporter midiImporter;
     struct SongEntry { std::string file, title, composer; };
     const std::vector<SongEntry> kSongs = {
-        {"assets/songs/parabens_pra_voce.mid",          "Parabéns Pra Você",                                "Tradicional"},
-        {"assets/songs/beethoven_ode_to_joy.mid",       "Ode to Joy",                                       "L.v. Beethoven"},
-        {"assets/songs/beethoven_fur_elise.mid",        "Für Elise",                                        "L.v. Beethoven"},
-        {"assets/songs/shigatsu_chopin_ballade_op23.mid","Ballade No. 1 in G Minor (Piano & Violin ver.)",  "Shigatsu wa Kimi no Uso / Chopin"},
-        {"assets/songs/shigatsu_beethoven_kreutzer.mid","Sonata No. 9 in A 'Kreutzer' Op. 47",             "Shigatsu wa Kimi no Uso / Beethoven"},
-        {"assets/songs/mozart_alla_turca.mid",          "Rondo Alla Turca",                                 "W.A. Mozart"},
-        {"assets/songs/chopin_prelude_op28_no4.mid",     "Prelude Op. 28 No. 4",                            "F. Chopin"},
+        {"assets/songs/parabens_pra_voce.mid",              "Parabéns Pra Você",                        "Tradicional"},
+        {"assets/songs/beethoven_ode_to_joy.mid",           "Ode to Joy",                               "L.v. Beethoven"},
+        {"assets/songs/chopin_prelude_op28_no4.mid",        "Prelude Op. 28 No. 4",                     "F. Chopin"},
+        {"assets/songs/beethoven_fur_elise.mid",            "Für Elise (WoO 59)",                       "L.v. Beethoven"},
+        {"assets/songs/mozart_alla_turca.mid",              "Rondo Alla Turca (KV 331, III)",           "W.A. Mozart"},
+        {"assets/songs/chopin_ballade_no1_op23.mid",        "Ballade No. 1 em Sol menor, Op. 23",       "F. Chopin"},
+        {"assets/songs/beethoven_kreutzer_op47_mov1.mid",   "Sonata No. 9 \'Kreutzer\' Op. 47 - I",      "L.v. Beethoven"},
+        {"assets/songs/beethoven_kreutzer_op47_mov3.mid",   "Sonata No. 9 \'Kreutzer\' Op. 47 - III",    "L.v. Beethoven"},
     };
     for (const auto& e : kSongs) {
         auto res = midiImporter.importFromFile(e.file);
@@ -290,9 +291,35 @@ int main(int, char*[]) {
 
     // ─── MODO DEMO (AUTO-PLAY) ───────────────────────────────────────────────
     bool demoMode = false;
-    std::set<size_t>      demoAutoPlayed;    // índices de grupos já tocados automaticamente
-    std::map<char,double> demoNoteOffTimes;  // key → playhead em que deve soltar a nota
+    std::set<size_t> demoAutoPlayed;                      // grupos já tocados automaticamente
+    std::map<char,std::pair<double,int>> demoNoteOffTimes; // key → {playhead de soltura, midi real}
     double demoRestartTimer = 0.0;
+
+    // ─── ACOMPANHAMENTO (mão esquerda / vozes internas / notas fora da dificuldade) ──
+    bool   backingEnabled   = true;
+    size_t backingCursor    = 0;
+    double backingLastPh    = 0.0;
+    std::vector<std::pair<double,int>> backingOff; // {playhead de soltura, midi}
+    std::map<char,int> soundingPitch;              // tecla física → midi real soando
+
+    // Resolve o pitch REAL que a tecla deve soar: procura a nota do chart mais
+    // próxima da hit line para essa tecla; fora da janela, cai no mapa cromático.
+    auto pitchForKey = [&](char key) -> int {
+        char norm = (char)toupper((unsigned char)key);
+        int best = -1; double bestDist = 1e9;
+        if (songMode) {
+            for (const auto& vn : songMode->getVisibleNotes(0.8)) {
+                for (size_t k = 0; k < vn.keys.size() && k < vn.midiNotes.size(); ++k) {
+                    if ((char)toupper((unsigned char)vn.keys[k]) != norm) continue;
+                    double d = std::abs(vn.timeToHit);
+                    if (d < bestDist) { bestDist = d; best = vn.midiNotes[k]; }
+                }
+            }
+        }
+        if (best >= 0 && bestDist <= 0.40) return best;
+        auto note = freePlay.mapper().noteForKey(key);
+        return note ? note->midi : -1;
+    };
 
     // ─── RELOAD CHART ────────────────────────────────────────────────────────
     auto reloadChart = [&]() {
@@ -309,6 +336,10 @@ int main(int, char*[]) {
         shockwaves.clear();
         demoAutoPlayed.clear();
         demoNoteOffTimes.clear();
+        backingCursor = 0;
+        backingLastPh = 0.0;
+        backingOff.clear();
+        soundingPitch.clear();
 
         songMode->setJudgementCallback([&](const Judgement& j, const PlayableChordGroup& group) {
             for (char k : group.keys) {
@@ -414,6 +445,8 @@ int main(int, char*[]) {
                     holdStates.clear();
                     demoAutoPlayed.clear();
                     demoNoteOffTimes.clear();
+                    backingOff.clear();
+                    soundingPitch.clear();
                 }
                 else if (sym==SDLK_F2) { currentMode=GameMode::SongMode; activeSongIndex=0; reloadChart(); }
                 else if (sym==SDLK_F3) { currentMode=GameMode::SongMode; activeSongIndex=1; reloadChart(); }
@@ -422,6 +455,15 @@ int main(int, char*[]) {
                 else if (sym==SDLK_F6) { currentMode=GameMode::SongMode; activeSongIndex=4; reloadChart(); }
                 else if (sym==SDLK_F7) { currentMode=GameMode::SongMode; activeSongIndex=5; reloadChart(); }
                 else if (sym==SDLK_F8) { currentMode=GameMode::SongMode; activeSongIndex=6; reloadChart(); }
+                else if (sym==SDLK_F9) { currentMode=GameMode::SongMode; activeSongIndex=7; reloadChart(); }
+                else if (sym==SDLK_F11) {
+                    // Toggle acompanhamento (mão esquerda / orquestra)
+                    backingEnabled = !backingEnabled;
+                    if (!backingEnabled) {
+                        for (auto& off : backingOff) g_synth.noteOff(off.second);
+                        backingOff.clear();
+                    }
+                }
                 else if (sym==SDLK_F12) {
                     // Toggle DEMO MODE — a máquina toca automaticamente
                     demoMode = !demoMode;
@@ -471,9 +513,12 @@ int main(int, char*[]) {
                     } else {
                         heldKeys.insert(key);
                         holdStates[key] = HoldState::Holding;
+                        int pitch = pitchForKey(key);
                         songMode->onKeyDown(key);
-                        auto note = freePlay.mapper().noteForKey(key);
-                        if (note) g_synth.noteOn(note->midi, 0.85f);
+                        if (pitch >= 0) {
+                            soundingPitch[key] = pitch;
+                            g_synth.noteOn(pitch, 0.95f);
+                        }
                     }
                 }
             }
@@ -491,14 +536,45 @@ int main(int, char*[]) {
                         if (it != holdStates.end() && it->second == HoldState::Holding) {
                             it->second = HoldState::Released;
                         }
-                        auto note = freePlay.mapper().noteForKey(key);
-                        if (note) g_synth.noteOff(note->midi);
+                        auto sp = soundingPitch.find(key);
+                        if (sp != soundingPitch.end()) { g_synth.noteOff(sp->second); soundingPitch.erase(sp); }
                     }
                 }
             }
         }
 
-        if (currentMode==GameMode::SongMode) songMode->update(dt);
+        if (currentMode==GameMode::SongMode) {
+            songMode->update(dt);
+
+            // ── ACOMPANHAMENTO ────────────────────────────────────────────────
+            // Toca tudo que não é jogável (mão esquerda, vozes internas, notas
+            // removidas pela dificuldade) para a peça soar inteira, no tom certo.
+            double bph = songMode->playhead();
+            if (bph < backingLastPh - 1e-6) { // restart / seek para trás
+                for (auto& off : backingOff) g_synth.noteOff(off.second);
+                backingOff.clear();
+                backingCursor = 0;
+            }
+            backingLastPh = bph;
+
+            if (backingEnabled) {
+                const auto& bn = songMode->chart().backingNotes;
+                while (backingCursor < bn.size() && bn[backingCursor].onset <= bph) {
+                    const auto& n = bn[backingCursor++];
+                    if (n.onset < bph - 0.30) continue; // nota velha demais (pulo de tempo)
+                    float vel = std::clamp((float)n.velocity / 127.0f, 0.05f, 1.0f) * 0.60f;
+                    g_synth.noteOn(n.midiNote, vel);
+                    backingOff.push_back({ bph + std::max(0.08, n.duration), n.midiNote });
+                }
+                for (size_t i = 0; i < backingOff.size(); ) {
+                    if (bph >= backingOff[i].first) {
+                        g_synth.noteOff(backingOff[i].second);
+                        backingOff[i] = backingOff.back();
+                        backingOff.pop_back();
+                    } else ++i;
+                }
+            }
+        }
 
         // ── DEMO AUTO-PLAYER ────────────────────────────────────────────────────
         // A máquina toca automaticamente as notas com timing perfeito
@@ -517,20 +593,25 @@ int main(int, char*[]) {
                                 char key = vn.keys[k];
                                 double dur = (k < vn.durations.size()) ? vn.durations[k] : 0.3;
 
+                                int pitch = (k < vn.midiNotes.size()) ? vn.midiNotes[k] : -1;
+
                                 // Toca a nota no engine de jogo (gera julgamento)
                                 songMode->onKeyDown(key);
 
-                                // Toca no sintetizador (som real)
-                                auto note = freePlay.mapper().noteForKey(key);
-                                if (note) g_synth.noteOn(note->midi, 0.88f);
+                                // Toca no sintetizador no tom REAL da partitura
+                                if (pitch < 0) {
+                                    auto note = freePlay.mapper().noteForKey(key);
+                                    pitch = note ? note->midi : -1;
+                                }
+                                if (pitch >= 0) g_synth.noteOn(pitch, 0.95f);
 
                                 // Atualiza visual: tecla verde como se estivesse pressionada
                                 heldKeys.insert(key);
                                 holdStates[key] = HoldState::Holding;
 
                                 // Agenda soltar a nota após a duração
-                                double releaseAt = ph + std::max(dur - 0.05, 0.05);
-                                demoNoteOffTimes[key] = releaseAt;
+                                double releaseAt = ph + std::max(dur - 0.03, 0.06);
+                                demoNoteOffTimes[key] = { releaseAt, pitch };
                             }
                         }
                     }
@@ -539,14 +620,13 @@ int main(int, char*[]) {
                 // Processa as solturas agendadas
                 double phNow = songMode->playhead();
                 for (auto it = demoNoteOffTimes.begin(); it != demoNoteOffTimes.end(); ) {
-                    if (phNow >= it->second) {
+                    if (phNow >= it->second.first) {
                         char key = it->first;
                         heldKeys.erase(key);
                         auto hsIt = holdStates.find(key);
                         if (hsIt != holdStates.end() && hsIt->second == HoldState::Holding)
                             hsIt->second = HoldState::Idle;
-                        auto note = freePlay.mapper().noteForKey(key);
-                        if (note) g_synth.noteOff(note->midi);
+                        if (it->second.second >= 0) g_synth.noteOff(it->second.second);
                         it = demoNoteOffTimes.erase(it);
                     } else {
                         ++it;
@@ -946,7 +1026,7 @@ int main(int, char*[]) {
             // Linha 3 (menor): Navegação compacta — abaixo do compositor, restrita à metade esquerda
             std::ostringstream nav;
             nav << "[F2-F8] Musica  [1/2/3] Dif  [TAB] Prox  [-/+] Queda:"
-                << std::fixed << std::setprecision(1) << lookahead << "s  [Enter] Reiniciar  [F12] DEMO";
+                << std::fixed << std::setprecision(1) << lookahead << "s  [Enter] Reiniciar  [F11] Acomp  [F12] DEMO";
             renderText(ren, fontTiny, nav.str(), 18, 48, {80,95,145,200});
         }
 

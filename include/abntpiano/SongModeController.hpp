@@ -23,6 +23,7 @@ struct VisibleNote {
     double timeToHit = 0.0; // segundos até cruzar a hit line (<= 0 significa cruzando/passou)
     std::vector<char> keys;
     std::vector<double> durations; // Duração das notas correspondentes
+    std::vector<int> midiNotes;    // Pitch real para o synth (paralelo a keys)
     bool isJudged = false;
 };
 

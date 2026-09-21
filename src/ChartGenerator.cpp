@@ -1,41 +1,51 @@
 #include "abntpiano/ChartGenerator.hpp"
 #include <algorithm>
 #include <cmath>
-#include <limits>
+#include <map>
 
 namespace abntpiano {
 
 namespace {
 
 // Tabela direta: posição de leitura (0..25) -> caractere 'A'-'Z'
-// Q W E R T Y U I O P (0..9)
-// A S D F G H J K L   (10..18)
-// Z X C V B N M       (19..25)
+// Q W E R T Y U I O P (0..9) / A S D F G H J K L (10..18) / Z X C V B N M (19..25)
 constexpr const char* kReadingOrder = "QWERTYUIOPASDFGHJKLZXCVBNM";
 
-// Encontra a melhor tecla para uma nota MIDI dentro do range das 26 teclas (RF13)
-// minimizando a distância física em relação à última tecla tocada.
-char mapMidiToBestKey(int midiNote, int baseMidi, int& lastReadingPos) {
-    // Range das 26 teclas: baseMidi até baseMidi + 25
-    int minRange = baseMidi;
-    int maxRange = baseMidi + 25;
+// Dobra o pitch para dentro do range das 26 teclas apenas para escolher a TECLA.
+// O pitch original é preservado separadamente em PlayableChordGroup::midiNotes.
+char mapMidiToKey(int midiNote, int baseMidi) {
+    int folded = midiNote;
+    while (folded < baseMidi)      folded += 12;
+    while (folded > baseMidi + 25) folded -= 12;
+    int pos = folded - baseMidi;
+    if (pos < 0 || pos > 25) pos = ((midiNote % 12) + 12) % 12;
+    return kReadingOrder[pos];
+}
 
-    // Preserva o tom e a oitava autênticos da partitura dentro do range das 26 teclas
-    int candidateMidi = midiNote;
-    while (candidateMidi < minRange) {
-        candidateMidi += 12;
+// Detecta a voz melódica: entre as vozes (tracks) com participação relevante,
+// a de maior pitch médio. Funciona tanto para piano ("Piano right" vs "Piano left")
+// quanto para sonatas violino+piano (violino = voz mais aguda).
+int detectMelodyVoice(const Song& song) {
+    std::map<int, std::pair<long long, long long>> stats; // voice -> {somaPitch, count}
+    long long total = 0;
+    for (const auto& g : song.chordGroups) {
+        for (const auto& n : g.noteEvents) {
+            auto& s = stats[n.voice];
+            s.first  += n.midiNote;
+            s.second += 1;
+            ++total;
+        }
     }
-    while (candidateMidi > maxRange) {
-        candidateMidi -= 12;
-    }
+    if (stats.size() <= 1 || total == 0) return -1;
 
-    int bestReadingPos = candidateMidi - minRange;
-    if (bestReadingPos < 0 || bestReadingPos > 25) {
-        bestReadingPos = (midiNote % 12 + 12) % 12;
+    int best = -1;
+    double bestMean = -1.0;
+    for (const auto& [voice, s] : stats) {
+        if (s.second * 10 < total) continue; // ignora vozes marginais (<10% das notas)
+        double mean = static_cast<double>(s.first) / static_cast<double>(s.second);
+        if (mean > bestMean) { bestMean = mean; best = voice; }
     }
-
-    lastReadingPos = bestReadingPos;
-    return kReadingOrder[bestReadingPos];
+    return best;
 }
 
 } // namespace
@@ -47,90 +57,118 @@ Chart ChartGenerator::generateChart(
     Chart chart{
         .songId = song.id,
         .difficulty = difficulty,
-        .playableEvents = {}
+        .playableEvents = {},
+        .backingNotes = {},
+        .melodyVoice = -1
     };
 
-    if (song.chordGroups.empty()) {
-        return chart;
-    }
+    if (song.chordGroups.empty()) return chart;
 
-    const auto& originalGroups = song.chordGroups;
-    size_t totalOriginal = originalGroups.size();
+    const int melodyVoice = detectMelodyVoice(song);
+    chart.melodyVoice = melodyVoice;
+    const int baseMidi = 60 + mapper_.octaveOffset();
 
-    // Seleção de grupos conforme noteDensityFactor (RF14, ADR-03)
-    std::vector<size_t> selectedIndices;
-    if (difficulty.noteDensityFactor >= 1.0f || totalOriginal <= 1) {
-        selectedIndices.resize(totalOriginal);
-        for (size_t i = 0; i < totalOriginal; ++i) selectedIndices[i] = i;
-    } else {
-        size_t targetCount = std::max<size_t>(
-            1,
-            static_cast<size_t>(std::round(static_cast<float>(totalOriginal) * difficulty.noteDensityFactor))
-        );
-        targetCount = std::min(targetCount, totalOriginal);
-
-        if (targetCount == totalOriginal) {
-            for (size_t i = 0; i < totalOriginal; ++i) selectedIndices.push_back(i);
-        } else if (targetCount == 1) {
-            selectedIndices.push_back(0);
-        } else {
-            // Amostragem rítmica uniforme determinística ao longo da peça
-            for (size_t k = 0; k < targetCount; ++k) {
-                size_t idx = static_cast<size_t>(
-                    std::round(static_cast<double>(k) * static_cast<double>(totalOriginal - 1) /
-                               static_cast<double>(targetCount - 1))
-                );
-                if (selectedIndices.empty() || selectedIndices.back() != idx) {
-                    selectedIndices.push_back(idx);
-                }
-            }
+    // Amostragem por dificuldade: grupos NÃO selecionados não somem da música,
+    // eles caem inteiros no acompanhamento. A peça sempre soa completa.
+    const size_t totalGroups = song.chordGroups.size();
+    std::vector<bool> isPlayable(totalGroups, true);
+    if (difficulty.noteDensityFactor < 1.0f && totalGroups > 1) {
+        const double keep = std::clamp(static_cast<double>(difficulty.noteDensityFactor), 0.05, 1.0);
+        double acc = 0.0;
+        for (size_t i = 0; i < totalGroups; ++i) {
+            acc += keep;
+            if (acc >= 1.0) { acc -= 1.0; isPlayable[i] = true; }
+            else            { isPlayable[i] = false; }
         }
     }
 
-    int lastReadingPos = 12; // Posição inicial no centro do teclado (ex: 'D' / home row)
-    chart.playableEvents.reserve(selectedIndices.size());
+    chart.playableEvents.reserve(totalGroups);
 
-    int baseMidi = 60 + mapper_.octaveOffset();
+    auto pushBacking = [&](const NoteEvent& n) {
+        chart.backingNotes.push_back(BackingNote{
+            .onset = n.timestamp,
+            .duration = std::max(0.05, n.duration),
+            .midiNote = n.midiNote,
+            .velocity = n.velocity,
+            .voice = n.voice
+        });
+    };
 
-    for (size_t idx : selectedIndices) {
-        const auto& group = originalGroups[idx];
-        auto notes = group.noteEvents;
+    for (size_t gi = 0; gi < totalGroups; ++gi) {
+        const auto& group = song.chordGroups[gi];
 
-        // Redução de tamanho de acorde se exceder maxChordSize (RF14)
-        if (difficulty.maxChordSize > 0 && notes.size() > static_cast<size_t>(difficulty.maxChordSize)) {
-            // Prioriza a melodia principal (nota mais aguda / soprano = maior midiNote)
-            std::sort(notes.begin(), notes.end(), [](const NoteEvent& a, const NoteEvent& b) {
-                if (a.midiNote != b.midiNote) {
-                    return a.midiNote > b.midiNote; // Melodia cantável tem prioridade máxima
-                }
-                return a.duration > b.duration;
-            });
-            notes.resize(difficulty.maxChordSize);
+        // 1) Separa melodia x acompanhamento pela voz detectada.
+        std::vector<NoteEvent> melody;
+        std::vector<NoteEvent> backing;
+        for (const auto& n : group.noteEvents) {
+            if (melodyVoice < 0 || n.voice == melodyVoice) melody.push_back(n);
+            else                                           backing.push_back(n);
         }
 
-        // Mapeia notas selecionadas para as teclas físicas e armazena suas durações
-        std::vector<char> mappedKeys;
+        // 2) Grupo não selecionado pela dificuldade → tudo vira acompanhamento.
+        if (!isPlayable[gi] || melody.empty()) {
+            for (const auto& n : group.noteEvents) pushBacking(n);
+            continue;
+        }
+
+        // 3) Dentro da melodia, skyline: voz superior primeiro (é a linha cantável).
+        std::sort(melody.begin(), melody.end(), [](const NoteEvent& a, const NoteEvent& b) {
+            if (a.midiNote != b.midiNote) return a.midiNote > b.midiNote;
+            return a.duration > b.duration;
+        });
+
+        size_t maxKeep = melody.size();
+        if (difficulty.maxChordSize > 0) {
+            maxKeep = std::min(maxKeep, static_cast<size_t>(difficulty.maxChordSize));
+        }
+
+        // Notas melódicas excedentes NÃO são apagadas: vão para o acompanhamento.
+        for (size_t i = maxKeep; i < melody.size(); ++i) backing.push_back(melody[i]);
+        melody.resize(maxKeep);
+
+        std::vector<char>   mappedKeys;
         std::vector<double> mappedDurations;
-        for (const auto& note : notes) {
-            char key = mapMidiToBestKey(note.midiNote, baseMidi, lastReadingPos);
-            // Evita teclas duplicadas no mesmo acorde (ex.: oitavas dobradas)
+        std::vector<int>    mappedMidi;
+        for (const auto& note : melody) {
+            char key = mapMidiToKey(note.midiNote, baseMidi);
             auto it = std::find(mappedKeys.begin(), mappedKeys.end(), key);
             if (it == mappedKeys.end()) {
                 mappedKeys.push_back(key);
-                mappedDurations.push_back(std::max(0.15, note.duration));
+                mappedDurations.push_back(std::max(0.12, note.duration));
+                mappedMidi.push_back(note.midiNote);
             } else {
-                size_t existingIdx = static_cast<size_t>(std::distance(mappedKeys.begin(), it));
-                mappedDurations[existingIdx] = std::max(mappedDurations[existingIdx], note.duration);
+                // Colisão de tecla (mesma classe de altura em oitavas diferentes):
+                // mantém a mais longa como alvo e manda a outra para o acompanhamento.
+                size_t idx = static_cast<size_t>(std::distance(mappedKeys.begin(), it));
+                if (note.duration > mappedDurations[idx]) {
+                    backing.push_back(NoteEvent{
+                        .timestamp = group.onset,
+                        .midiNote = mappedMidi[idx],
+                        .duration = mappedDurations[idx],
+                        .velocity = note.velocity,
+                        .voice = note.voice
+                    });
+                    mappedDurations[idx] = note.duration;
+                    mappedMidi[idx] = note.midiNote;
+                } else {
+                    backing.push_back(note);
+                }
             }
         }
+
+        for (const auto& n : backing) pushBacking(n);
 
         chart.playableEvents.push_back(PlayableChordGroup{
             .onset = group.onset,
             .keys = std::move(mappedKeys),
             .durations = std::move(mappedDurations),
+            .midiNotes = std::move(mappedMidi),
             .originalChordGroup = group
         });
     }
+
+    std::sort(chart.backingNotes.begin(), chart.backingNotes.end(),
+              [](const BackingNote& a, const BackingNote& b) { return a.onset < b.onset; });
 
     return chart;
 }

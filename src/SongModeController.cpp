@@ -167,6 +167,7 @@ std::vector<VisibleNote> SongModeController::getVisibleNotes(double lookaheadSec
                 .timeToHit = timeToHit,
                 .keys = ev.keys,
                 .durations = ev.durations,
+                .midiNotes = ev.midiNotes,
                 .isJudged = isGroupJudged_[i]
             });
         }
