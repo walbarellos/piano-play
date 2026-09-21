@@ -158,7 +158,9 @@ int main() {
 
         // Simula passagem de frames de 0 a 2.0s em passos de 0.016s (~60 FPS)
         for (double t = 0.0; t <= 2.0; t += 0.016) {
-            demo.update(t, controller, heldKeys, holdStates);
+            double delta = t - controller.playhead();
+            if (delta > 0.0) controller.update(delta);
+            demo.update(controller.playhead(), controller, heldKeys, holdStates);
         }
 
         assert(missCount == 0);

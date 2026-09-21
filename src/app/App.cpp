@@ -145,7 +145,7 @@ void App::reloadChart() {
     songMode_->setJudgementCallback([this](const Judgement& j, const PlayableChordGroup& group) {
         for (char k : group.keys) {
             char norm = static_cast<char>(std::toupper(static_cast<unsigned char>(k)));
-            double expireT = songMode_->playhead() + 0.42;
+            double expireT = songMode_->playhead() + 0.20;
             keyFeedbacks_[norm] = ui::KeyFeedback{j.type, expireT};
 
             if (j.type == JudgementType::Miss) {
@@ -313,12 +313,11 @@ void App::handleEvent(const SDL_Event& ev) {
 void App::update(double rawDt) {
     if (currentMode_ == GameMode::SongMode && songMode_) {
         double target = (synth_.audioTime() - songStartAudio_) * songSpeed_;
+        double delta = target - songMode_->playhead();
+        if (delta > 0.0) songMode_->update(delta);
 
         if (demoMode_ && !hasFinished_) {
-            demoPlayer_.update(target, *songMode_, heldKeys_, holdStates_);
-        } else {
-            double delta = target - songMode_->playhead();
-            if (delta > 0.0) songMode_->update(delta);
+            demoPlayer_.update(songMode_->playhead(), *songMode_, heldKeys_, holdStates_);
         }
 
         const double ph = songMode_->playhead();

@@ -46,8 +46,7 @@ void KeyboardRenderer::render(SDL_Renderer* ren,
 
     for (const auto& vk : kVisualKeys) {
         SDL_Rect r = getKeyRect(vk.key);
-        bool isPhysPressed = heldKeys.count(vk.key) > 0;
-        bool onHit = keysAtHitLine.count(vk.key) > 0;
+        bool isPhysPressed = heldKeys.count(vk.key) > 0 || (holdStates.count(vk.key) > 0 && holdStates.at(vk.key) == HoldState::Holding);
 
         auto itFb = feedbacks.find(vk.key);
         bool hasFb = (itFb != feedbacks.end() && itFb->second.expireTime > currentPlayhead);
@@ -55,22 +54,34 @@ void KeyboardRenderer::render(SDL_Renderer* ren,
         auto itHold = holdStates.find(vk.key);
         HoldState hState = (itHold != holdStates.end()) ? itHold->second : HoldState::Idle;
 
+        // Visual 3D key depression when physically held
+        if (isPhysPressed) {
+            r.y += 2;
+            r.h -= 2;
+        }
+
         Uint8 rr = 22, gg = 27, bb = 44;
-        if (hasFb) {
-            switch (itFb->second.type) {
-                case JudgementType::Perfect: rr = 255; gg = 210; bb = 30;  break;
-                case JudgementType::Great:   rr = 40;  gg = 230; bb = 100; break;
-                case JudgementType::Good:    rr = 40;  gg = 160; bb = 255; break;
-                case JudgementType::Miss:    rr = 230; gg = 30;  bb = 55;  break;
+        if (isPhysPressed) {
+            if (hasFb) {
+                switch (itFb->second.type) {
+                    case JudgementType::Perfect: rr = 255; gg = 210; bb = 30;  break;
+                    case JudgementType::Great:   rr = 45;  gg = 230; bb = 100; break;
+                    case JudgementType::Good:    rr = 40;  gg = 170; bb = 255; break;
+                    case JudgementType::Miss:    rr = 230; gg = 30;  bb = 55;  break;
+                }
+            } else {
+                rr = 25; gg = 205; bb = 85;
             }
-        } else if (isPhysPressed || hState == HoldState::Holding) {
-            rr = 20; gg = 200; bb = 80;
-        } else if (hState == HoldState::Released) {
-            rr = 80; gg = 85; bb = 100;
+        } else if (hasFb) {
+            // Subtle residual glow after key release
+            switch (itFb->second.type) {
+                case JudgementType::Perfect: rr = 70;  gg = 60;  bb = 20;  break;
+                case JudgementType::Great:   rr = 20;  gg = 65;  bb = 30;  break;
+                case JudgementType::Good:    rr = 20;  gg = 45;  bb = 75;  break;
+                case JudgementType::Miss:    rr = 75;  gg = 20;  bb = 25;  break;
+            }
         } else if (hState == HoldState::Missed) {
-            rr = 180; gg = 20; bb = 40;
-        } else if (onHit) {
-            rr = 18; gg = 75; bb = 40;
+            rr = 90; gg = 20; bb = 30;
         }
 
         renderGradientRect(ren, r,
@@ -85,16 +96,18 @@ void KeyboardRenderer::render(SDL_Renderer* ren,
         SDL_RenderDrawLine(ren, r.x + 2, r.y + 1, r.x + r.w - 3, r.y + 1);
 
         // Borda
-        if (hasFb && itFb->second.type == JudgementType::Perfect) {
-            SDL_SetRenderDrawColor(ren, 255, 255, 200, 255);
-        } else if (hasFb && itFb->second.type == JudgementType::Great) {
-            SDL_SetRenderDrawColor(ren, 160, 255, 180, 255);
-        } else if (isPhysPressed || hState == HoldState::Holding) {
-            SDL_SetRenderDrawColor(ren, 80, 255, 140, 255);
-        } else if (hState == HoldState::Missed) {
+        if (isPhysPressed) {
+            if (hasFb && itFb->second.type == JudgementType::Perfect) {
+                SDL_SetRenderDrawColor(ren, 255, 255, 200, 255);
+            } else if (hasFb && itFb->second.type == JudgementType::Great) {
+                SDL_SetRenderDrawColor(ren, 160, 255, 180, 255);
+            } else if (hasFb && itFb->second.type == JudgementType::Good) {
+                SDL_SetRenderDrawColor(ren, 120, 220, 255, 255);
+            } else {
+                SDL_SetRenderDrawColor(ren, 80, 255, 140, 255);
+            }
+        } else if (hasFb && itFb->second.type == JudgementType::Miss) {
             SDL_SetRenderDrawColor(ren, 255, 60, 80, 255);
-        } else if (onHit) {
-            SDL_SetRenderDrawColor(ren, 50, 255, 120, 255);
         } else {
             SDL_SetRenderDrawColor(ren, 50, 62, 95, 255);
         }
@@ -106,9 +119,9 @@ void KeyboardRenderer::render(SDL_Renderer* ren,
 
         // Letra
         SDL_Color keyLetterColor =
-            (isPhysPressed || hState == HoldState::Holding) ? SDL_Color{220, 255, 230, 255} :
-            hasFb ? SDL_Color{255, 255, 255, 255} :
-            SDL_Color{200, 210, 230, 255};
+            isPhysPressed ? SDL_Color{255, 255, 255, 255} :
+            hasFb         ? SDL_Color{240, 240, 240, 255} :
+                            SDL_Color{200, 210, 230, 255};
         std::string kStr(1, vk.key);
         renderText(ren, fonts.medium, kStr, r.x + r.w / 2, r.y + 18, keyLetterColor, true);
 
