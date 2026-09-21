@@ -93,7 +93,7 @@ private:
     double lookahead_ = 3.5;
     double playbackSpeed_ = 1.0;
 
-    bool demoMode_ = false;
+    bool demoMode_ = true;
     double demoRestartTimer_ = 0.0;
 
     bool backingEnabled_ = true;

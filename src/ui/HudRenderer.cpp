@@ -124,12 +124,12 @@ void HudRenderer::renderStats(SDL_Renderer* ren, const FontCollection& fonts, co
     if (isDemoMode) {
         bool blinkOn = (std::fmod(playhead, 0.5) < 0.35);
         if (blinkOn) {
-            SDL_Rect demoBg{kScreenWidth / 2 - 48, 6, 96, 28};
+            SDL_Rect demoBg{kScreenWidth / 2 - 68, 6, 136, 28};
             SDL_SetRenderDrawColor(ren, 180, 30, 220, 220);
             SDL_RenderFillRect(ren, &demoBg);
             SDL_SetRenderDrawColor(ren, 255, 100, 255, 255);
             SDL_RenderDrawRect(ren, &demoBg);
-            renderText(ren, fonts.small, "◉ DEMO", kScreenWidth / 2, 20, {255, 255, 255, 255}, true);
+            renderText(ren, fonts.small, "◉ DEMO [F12]", kScreenWidth / 2, 20, {255, 255, 255, 255}, true);
         }
     }
 }
