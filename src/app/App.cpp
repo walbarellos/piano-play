@@ -213,7 +213,7 @@ void App::handleKeyDown(SDL_Keycode sym) {
         heldKeys_.clear();
         holdStates_.clear();
         soundingPitch_.clear();
-    } else if (sym >= SDLK_F2 && sym <= SDLK_F8) {
+    } else if (sym >= SDLK_F2 && sym <= SDLK_F6) {
         currentMode_ = GameMode::SongMode;
         activeSongIndex_ = static_cast<size_t>(sym - SDLK_F2);
         reloadChart();

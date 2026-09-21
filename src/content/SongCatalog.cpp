@@ -5,8 +5,6 @@
 namespace abntpiano {
 
 static const std::vector<SongEntry> kDefaultCatalogEntries = {
-    {"assets/songs/parabens_pra_voce.mid",         "Parabéns Pra Você",                  "Tradicional"},
-    {"assets/songs/beethoven_ode_to_joy.mid",      "Ode to Joy",                         "L.v. Beethoven"},
     {"assets/songs/beethoven_fur_elise.mid",       "Für Elise (WoO 59)",                 "L.v. Beethoven"},
     {"assets/songs/chopin_prelude_op28_no4.mid",   "Prelude Op. 28 No. 4",               "F. Chopin"},
     {"assets/songs/mozart_alla_turca.mid",         "Rondo Alla Turca (KV 331, III)",     "W.A. Mozart"},

@@ -189,7 +189,7 @@ void HudRenderer::renderShortcutsOverlay(SDL_Renderer* ren, const FontCollection
     renderText(ren, fonts.medium, "ATALHOS DO TECLADO", cardX + cardW / 2, cardY + 22, {239, 230, 214, 255}, true);
 
     const std::pair<std::string, std::string> shortcuts[] = {
-        {"F2 – F8",       "Escolher música do repertório"},
+        {"F2 – F6",       "Escolher obra completa do repertório"},
         {"TAB",           "Alternar para a próxima música"},
         {"1 / 2 / 3",     "Dificuldade: Fácil / Normal / Difícil"},
         {"F12",           "Ligar/desligar modo DEMO"},

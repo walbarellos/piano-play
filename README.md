@@ -38,15 +38,13 @@ ctest --test-dir build --output-on-failure
 
 ## 🎮 Controles
 
-### Músicas e Modos
+### Músicas e Modos (Obras Clássicas Completas)
 - **F1**: Modo *Free Play* (toque livre no teclado)
-- **F2**: *Parabéns Pra Você* (Tutorial)
-- **F3**: *Beethoven - Ode to Joy (Hino à Alegria)*
-- **F4**: *Beethoven - Für Elise (WoO 59)*
-- **F5**: *Chopin - Prelude Op. 28 No. 4*
-- **F6**: *Mozart - Rondo Alla Turca (KV 331, III)*
-- **F7**: *Chopin - Ballade No. 1 em Sol menor, Op. 23 (Completa - 5.013 notas)*
-- **F8**: *Beethoven - Sonata No. 9 'Kreutzer' - I. Presto (Shigatsu wa Kimi no Uso ver. - 10.711 notas)*
+- **F2**: *Beethoven - Für Elise (WoO 59)* — Obra Completa (A-B-A-C-A, 1.041 notas, 3:48)
+- **F3**: *Chopin - Prelude Op. 28 No. 4 em Mi menor* — Obra Completa (604 notas, 1:33)
+- **F4**: *Mozart - Rondo Alla Turca (KV 331, III)* — Obra Completa (2.819 notas, 3:44)
+- **F5**: *Chopin - Ballade No. 1 em Sol menor, Op. 23* — Obra Completa (5.013 notas, 8:05)
+- **F6**: *Beethoven - Sonata No. 9 'Kreutzer' - I. Presto* — Obra Completa (10.711 notas, 10:41)
 - **TAB**: Alternar para a próxima canção do catálogo
 - **F10**: Alternar Guia Melódico Audível
 - **F11**: Alternar Acompanhamento (mão esquerda)
