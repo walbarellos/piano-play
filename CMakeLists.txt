@@ -16,6 +16,9 @@ add_library(abntpiano_core STATIC
     src/SaveGameRepository.cpp
     src/ScoringEngine.cpp
     src/SongModeController.cpp
+    src/SynthEngine.cpp
+    src/SongCatalog.cpp
+    src/DemoPlayer.cpp
 )
 
 target_include_directories(abntpiano_core PUBLIC
@@ -63,6 +66,16 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(SDL2 REQUIRED sdl2)
 pkg_check_modules(SDL2_TTF QUIET SDL2_ttf)
 
-add_executable(abntpiano_app src/main.cpp)
+add_executable(abntpiano_app
+    src/main.cpp
+    src/App.cpp
+    src/AudioDevice.cpp
+    src/ui/RenderTypes.cpp
+    src/ui/ParticleSystem.cpp
+    src/ui/KeyboardRenderer.cpp
+    src/ui/HighwayRenderer.cpp
+    src/ui/HudRenderer.cpp
+    src/ui/ResultsOverlay.cpp
+)
 target_include_directories(abntpiano_app PRIVATE ${SDL2_INCLUDE_DIRS} ${SDL2_TTF_INCLUDE_DIRS})
 target_link_libraries(abntpiano_app PRIVATE abntpiano_core ${SDL2_LIBRARIES} ${SDL2_TTF_LIBRARIES})
