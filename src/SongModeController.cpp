@@ -1,6 +1,7 @@
 #include "abntpiano/SongModeController.hpp"
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 
 namespace abntpiano {
 
