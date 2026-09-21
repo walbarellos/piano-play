@@ -42,13 +42,16 @@ ctest --test-dir build --output-on-failure
 - **F1**: Modo *Free Play* (toque livre no teclado)
 - **F2**: *Parabéns Pra Você* (Tutorial)
 - **F3**: *Beethoven - Ode to Joy (Hino à Alegria)*
-- **F4**: *Beethoven - Für Elise*
-- **F5**: *Shigatsu wa Kimi no Uso - Chopin's Ballade No. 1 in G Minor, Op. 23 (Piano with Violin ver.)*
-- **F6**: *Shigatsu wa Kimi no Uso - Beethoven Violin Sonata No. 9 in A 'Kreutzer', Op. 47*
-- **F7**: *Mozart - Rondo Alla Turca*
-- **F8**: *Chopin - Prelude Op. 28 No. 4*
-- **TAB**: Alternar para a próxima canção
-- **F12**: **Modo DEMO Automático** (a máquina demonstra a música com execução perfeita)
+- **F4**: *Beethoven - Für Elise (WoO 59)*
+- **F5**: *Chopin - Prelude Op. 28 No. 4*
+- **F6**: *Mozart - Rondo Alla Turca (KV 331, III)*
+- **F7**: *Chopin - Ballade No. 1 em Sol menor, Op. 23 (Completa)*
+- **F8**: *Beethoven - Sonata No. 9 'Kreutzer' - I. Presto (Shigatsu wa Kimi no Uso ver.)*
+- **F9**: *Beethoven - Sonata No. 9 'Kreutzer' Op. 47 - Completa (Adagio + Presto)*
+- **TAB**: Alternar para a próxima canção (incluindo Kreutzer Mov. III Finale)
+- **F10**: Alternar Guia Melódico Audível
+- **F11**: Alternar Acompanhamento (mão esquerda)
+- **F12**: **Modo DEMO Automático** (a máquina demonstra com timing humano autêntico: Perfect/Great/Good)
 
 ### Dificuldade e Ajustes
 - **1**: Fácil (Easy)

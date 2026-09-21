@@ -8,6 +8,8 @@ SongModeController::SongModeController(Chart chart)
     : chart_(std::move(chart)) {
     isGroupJudged_.resize(chart_.playableEvents.size(), false);
     groupInputs_.resize(chart_.playableEvents.size());
+    unjudgedCount_ = chart_.playableEvents.size();
+    firstUnjudgedIdx_ = 0;
 }
 
 void SongModeController::start() {
@@ -18,6 +20,8 @@ void SongModeController::start() {
     for (auto& inputs : groupInputs_) {
         inputs.clear();
     }
+    unjudgedCount_ = chart_.playableEvents.size();
+    firstUnjudgedIdx_ = 0;
 }
 
 void SongModeController::pause() {
@@ -46,16 +50,8 @@ void SongModeController::update(double deltaTimeSeconds) {
     playhead_ += deltaTimeSeconds;
     checkExpiredNotes();
 
-    // Verifica se todas as notas foram julgadas
-    bool allJudged = true;
-    for (bool judged : isGroupJudged_) {
-        if (!judged) {
-            allJudged = false;
-            break;
-        }
-    }
-
-    if (allJudged) {
+    // Verifica se todas as notas foram julgadas em O(1)
+    if (unjudgedCount_ == 0) {
         double lastTime = 0.0;
         if (!chart_.playableEvents.empty()) {
             lastTime = chart_.playableEvents.back().onset;
@@ -72,25 +68,33 @@ void SongModeController::update(double deltaTimeSeconds) {
 void SongModeController::checkExpiredNotes() {
     double missWindowSec = (chart_.difficulty.hitWindow.missAbove + 1e-4) / 1000.0;
 
-    for (size_t i = 0; i < chart_.playableEvents.size(); ++i) {
+    for (size_t i = firstUnjudgedIdx_; i < chart_.playableEvents.size(); ++i) {
         if (!isGroupJudged_[i]) {
-            if (playhead_ > chart_.playableEvents[i].onset + missWindowSec) {
-                // Nota/acorde expirou por timeout (TC16)
-                auto judgement = judgeChordGroup(
-                    chart_.playableEvents[i].keys,
-                    chart_.playableEvents[i].onset,
-                    groupInputs_[i],
-                    chart_.difficulty
-                );
+            if (chart_.playableEvents[i].onset + missWindowSec >= playhead_) {
+                // Como playableEvents está estritamente ordenado por onset,
+                // nenhuma nota posterior a esta pode ter expirado!
+                break;
+            }
 
-                isGroupJudged_[i] = true;
-                scoring_.registerJudgement(judgement);
+            // Nota/acorde expirou por timeout (TC16)
+            auto judgement = judgeChordGroup(
+                chart_.playableEvents[i].keys,
+                chart_.playableEvents[i].onset,
+                groupInputs_[i],
+                chart_.difficulty
+            );
 
-                if (judgementCb_) {
-                    judgementCb_(judgement, chart_.playableEvents[i]);
-                }
+            isGroupJudged_[i] = true;
+            if (unjudgedCount_ > 0) --unjudgedCount_;
+            scoring_.registerJudgement(judgement);
+
+            if (judgementCb_) {
+                judgementCb_(judgement, chart_.playableEvents[i]);
             }
         }
+    }
+    while (firstUnjudgedIdx_ < chart_.playableEvents.size() && isGroupJudged_[firstUnjudgedIdx_]) {
+        ++firstUnjudgedIdx_;
     }
 }
 
@@ -104,9 +108,13 @@ void SongModeController::onKeyDown(char key) {
     int bestIdx = -1;
     double minDistance = 1e9;
 
-    for (size_t i = 0; i < chart_.playableEvents.size(); ++i) {
+    for (size_t i = firstUnjudgedIdx_; i < chart_.playableEvents.size(); ++i) {
         if (!isGroupJudged_[i]) {
             double onset = chart_.playableEvents[i].onset;
+            if (onset > playhead_ + missWindowSec) {
+                // Notas futuras além da janela de acerto não podem corresponder a este input
+                break;
+            }
             double dist = std::abs(playhead_ - onset);
 
             if (dist <= missWindowSec) {
@@ -141,9 +149,13 @@ void SongModeController::onKeyDown(char key) {
         // Se o grupo foi acertado integralmente ou atingiu critério parcial (Easy), finaliza o grupo
         if (judgement.type != JudgementType::Miss) {
             isGroupJudged_[idx] = true;
+            if (unjudgedCount_ > 0) --unjudgedCount_;
             scoring_.registerJudgement(judgement);
             if (judgementCb_) {
                 judgementCb_(judgement, chart_.playableEvents[idx]);
+            }
+            while (firstUnjudgedIdx_ < chart_.playableEvents.size() && isGroupJudged_[firstUnjudgedIdx_]) {
+                ++firstUnjudgedIdx_;
             }
         }
     }

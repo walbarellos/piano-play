@@ -153,7 +153,7 @@ int main(int, char*[]) {
     // ── JANELA 1280×800 ──
     const int SW = 1280, SH = 800;
     SDL_Window* window = SDL_CreateWindow(
-        "ABNT Piano  ♪  [F2–F6] Músicas  |  [1–3] Dificuldade  |  [F1] Free Play",
+        "ABNT Piano  ♪  [F2–F9] Músicas  |  [1–3] Dificuldade  |  [F1] Free Play  |  [F12] Demo",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SW, SH,
         SDL_WINDOW_SHOWN
     );
@@ -179,11 +179,12 @@ int main(int, char*[]) {
     const std::vector<SongEntry> kSongs = {
         {"assets/songs/parabens_pra_voce.mid",              "Parabéns Pra Você",                        "Tradicional"},
         {"assets/songs/beethoven_ode_to_joy.mid",           "Ode to Joy",                               "L.v. Beethoven"},
-        {"assets/songs/chopin_prelude_op28_no4.mid",        "Prelude Op. 28 No. 4",                     "F. Chopin"},
         {"assets/songs/beethoven_fur_elise.mid",            "Für Elise (WoO 59)",                       "L.v. Beethoven"},
+        {"assets/songs/chopin_prelude_op28_no4.mid",        "Prelude Op. 28 No. 4",                     "F. Chopin"},
         {"assets/songs/mozart_alla_turca.mid",              "Rondo Alla Turca (KV 331, III)",           "W.A. Mozart"},
         {"assets/songs/chopin_ballade_no1_op23.mid",        "Ballade No. 1 em Sol menor, Op. 23",       "F. Chopin"},
-        {"assets/songs/beethoven_kreutzer_op47_mov1.mid",   "Sonata No. 9 \'Kreutzer\' Op. 47 - I",      "L.v. Beethoven"},
+        {"assets/songs/beethoven_kreutzer_presto.mid",      "Sonata No. 9 \'Kreutzer\' - I. Presto",     "L.v. Beethoven"},
+        {"assets/songs/beethoven_kreutzer_op47_mov1.mid",   "Sonata No. 9 \'Kreutzer\' Op. 47 - Completa","L.v. Beethoven"},
         {"assets/songs/beethoven_kreutzer_op47_mov3.mid",   "Sonata No. 9 \'Kreutzer\' Op. 47 - III",    "L.v. Beethoven"},
     };
     for (const auto& e : kSongs) {
@@ -291,7 +292,8 @@ int main(int, char*[]) {
 
     // ─── MODO DEMO (AUTO-PLAY) ───────────────────────────────────────────────
     bool demoMode = false;
-    std::set<size_t> demoAutoPlayed;                      // grupos já tocados automaticamente
+    size_t demoCursor = 0;
+    double demoLastHitTime = -1.0;
     std::map<char,double> demoNoteOffTimes; // key → playhead de soltura (apenas visual)
     double demoRestartTimer = 0.0;
 
@@ -317,11 +319,14 @@ int main(int, char*[]) {
         songStartAudio = g_synth.audioTime() + leadIn - playheadNow / songSpeed;
         backingCursor = 0;
         melodyCursor  = 0;
+        demoCursor    = 0;
+        demoLastHitTime = -1.0;
         if (songMode) {
             const auto& bn = songMode->chart().backingNotes;
             while (backingCursor < bn.size() && bn[backingCursor].onset < playheadNow) ++backingCursor;
             const auto& pe = songMode->chart().playableEvents;
             while (melodyCursor < pe.size() && pe[melodyCursor].onset < playheadNow) ++melodyCursor;
+            while (demoCursor < pe.size() && pe[demoCursor].onset < playheadNow) ++demoCursor;
         }
     };
 
@@ -357,7 +362,7 @@ int main(int, char*[]) {
         particles.clear();
         floatingTexts.clear();
         shockwaves.clear();
-        demoAutoPlayed.clear();
+        demoCursor = 0;
         demoNoteOffTimes.clear();
         soundingPitch.clear();
 
@@ -464,7 +469,7 @@ int main(int, char*[]) {
                     g_synth.allNotesOff();
                     heldKeys.clear();
                     holdStates.clear();
-                    demoAutoPlayed.clear();
+                    demoCursor = 0;
                     demoNoteOffTimes.clear();
                     soundingPitch.clear();
                 }
@@ -494,7 +499,8 @@ int main(int, char*[]) {
                     hasFinished = false;
                     g_synth.allNotesOff();
                     songMode->restart();
-                    demoAutoPlayed.clear();
+                    demoCursor = 0;
+                    demoLastHitTime = -1.0;
                     demoNoteOffTimes.clear();
                     demoRestartTimer = 0.0;
                     heldKeys.clear();
@@ -528,7 +534,8 @@ int main(int, char*[]) {
                     g_synth.allNotesOff();
                     heldKeys.clear();
                     holdStates.clear();
-                    demoAutoPlayed.clear();
+                    demoCursor = 0;
+                    demoLastHitTime = -1.0;
                     demoNoteOffTimes.clear();
                     demoRestartTimer = 0.0;
                     songMode->restart();
@@ -584,8 +591,94 @@ int main(int, char*[]) {
             // dessincroniza mais nada: o vídeo pula, o áudio continua, e o
             // playhead segue o áudio.
             double target = (g_synth.audioTime() - songStartAudio) * songSpeed;
-            double delta  = target - songMode->playhead();
-            if (delta > 0.0) songMode->update(delta);
+
+            if (demoMode && !hasFinished) {
+                // ── DEMO AUTO-PLAYER HUMANO & MULTI-GRADE ─────────────────────
+                // Em demo, avança o playhead passo a passo até cada nota e pressiona
+                // com timing humano orgânico (72% Perfect, 20% Great, 8% Good, 0% Miss).
+                const auto& pe = songMode->chart().playableEvents;
+                const auto& hw = songMode->chart().difficulty.hitWindow;
+
+                while (demoCursor < pe.size()) {
+                    const auto& g = pe[demoCursor];
+                    double nextGap = (demoCursor + 1 < pe.size()) ? (pe[demoCursor+1].onset - g.onset) : 1.0;
+                    if (nextGap < 0.001) nextGap = 0.001;
+
+                    int seed = (demoCursor * 37 + 13) % 100;
+                    double humanOffset = 0.0;
+                    if (seed < 72) {
+                        double frac = ((seed % 19) - 9) / 9.0;
+                        humanOffset = frac * (hw.perfect * 0.40) / 1000.0;
+                    } else if (seed < 92) {
+                        double sign = (seed % 2 == 0) ? 1.0 : -1.0;
+                        double span = hw.great - hw.perfect;
+                        humanOffset = sign * (hw.perfect + 0.15 * span + ((seed % 7) / 7.0) * (0.50 * span)) / 1000.0;
+                    } else {
+                        double sign = (seed % 2 == 0) ? 1.0 : -1.0;
+                        double span = hw.good - hw.great;
+                        humanOffset = sign * (hw.great + 0.15 * span + ((seed % 7) / 7.0) * (0.45 * span)) / 1000.0;
+                    }
+
+                    // Se a próxima nota for muito próxima (ex: semicolcheias rápidas),
+                    // limita a variação para as notas não se atropelarem
+                    if (nextGap < 0.25) {
+                        double cap = nextGap * 0.35;
+                        if (humanOffset > cap)  humanOffset = cap;
+                        if (humanOffset < -cap) humanOffset = -cap;
+                    }
+
+                    double hitTime = g.onset + humanOffset;
+                    if (hitTime < demoLastHitTime + 0.010) hitTime = demoLastHitTime + 0.010;
+                    double maxSafe = g.onset + (hw.good - 25.0) / 1000.0;
+                    if (hitTime > maxSafe) hitTime = maxSafe;
+
+                    if (hitTime > target) {
+                        break; // Próxima nota ainda não chegou
+                    }
+
+                    // Avança o playhead até o instante exato do hit humano
+                    double step = hitTime - songMode->playhead();
+                    if (step > 0.0) {
+                        songMode->update(step);
+                    }
+
+                    if (!songMode->isGroupJudged(demoCursor)) {
+                        for (size_t k = 0; k < g.keys.size(); ++k) {
+                            char key = g.keys[k];
+                            double dur = (k < g.durations.size()) ? g.durations[k] : 0.3;
+                            songMode->onKeyDown(key);
+                            heldKeys.insert(key);
+                            holdStates[key] = HoldState::Holding;
+                            demoNoteOffTimes[key] = songMode->playhead() + std::max(dur - 0.03, 0.06);
+                        }
+                    }
+                    demoLastHitTime = songMode->playhead();
+                    demoCursor++;
+                }
+
+                // Avança o restante até target
+                double rem = target - songMode->playhead();
+                if (rem > 0.0) songMode->update(rem);
+
+                // Processa as solturas agendadas
+                double phNow = songMode->playhead();
+                for (auto it = demoNoteOffTimes.begin(); it != demoNoteOffTimes.end(); ) {
+                    if (phNow >= it->second) {
+                        char key = it->first;
+                        heldKeys.erase(key);
+                        auto hsIt = holdStates.find(key);
+                        if (hsIt != holdStates.end() && hsIt->second == HoldState::Holding)
+                            hsIt->second = HoldState::Idle;
+                        it = demoNoteOffTimes.erase(it);
+                    } else {
+                        ++it;
+                    }
+                }
+            } else {
+                // Modo jogador normal: playhead segue o áudio continuamente
+                double delta = target - songMode->playhead();
+                if (delta > 0.0) songMode->update(delta);
+            }
 
             const double ph      = songMode->playhead();
             const double horizon = ph + kScheduleAhead;
@@ -606,8 +699,6 @@ int main(int, char*[]) {
             }
 
             // ── AGENDA O GUIA MELÓDICO ───────────────────────────────────────
-            // Sem isto, quem só assiste ouve apenas a mão esquerda — era por isso
-            // que o áudio parecia não ter relação com o que cai na tela.
             if (autoMelody) {
                 const auto& pe = songMode->chart().playableEvents;
                 while (melodyCursor < pe.size() && pe[melodyCursor].onset <= horizon) {
@@ -623,67 +714,21 @@ int main(int, char*[]) {
             }
         }
 
-        // ── DEMO AUTO-PLAYER ────────────────────────────────────────────────────
-        // A máquina toca automaticamente as notas com timing perfeito
-        if (demoMode && currentMode==GameMode::SongMode) {
-            if (!hasFinished) {
-                auto visible = songMode->getVisibleNotes(lookahead);
-                double ph = songMode->playhead();
-
-                // Detecta notas chegando na hit line e toca automaticamente
-                for (const auto& vn : visible) {
-                    // Janela de -0.02s a +0.05s em torno do hit line = timing "perfeito"
-                    if (!vn.isJudged && vn.timeToHit <= 0.02 && vn.timeToHit >= -0.05) {
-                        if (demoAutoPlayed.find(vn.groupIndex) == demoAutoPlayed.end()) {
-                            demoAutoPlayed.insert(vn.groupIndex);
-                            for (size_t k = 0; k < vn.keys.size(); k++) {
-                                char key = vn.keys[k];
-                                double dur = (k < vn.durations.size()) ? vn.durations[k] : 0.3;
-
-                                // Julgamento perfeito. O SOM não sai daqui: quem
-                                // toca é o guia melódico agendado em tempo de áudio.
-                                songMode->onKeyDown(key);
-
-                                // Atualiza visual: tecla verde como se estivesse pressionada
-                                heldKeys.insert(key);
-                                holdStates[key] = HoldState::Holding;
-
-                                // Agenda soltar a nota após a duração
-                                demoNoteOffTimes[key] = ph + std::max(dur - 0.03, 0.06);
-                            }
-                        }
-                    }
-                }
-
-                // Processa as solturas agendadas
-                double phNow = songMode->playhead();
-                for (auto it = demoNoteOffTimes.begin(); it != demoNoteOffTimes.end(); ) {
-                    if (phNow >= it->second) {
-                        char key = it->first;
-                        heldKeys.erase(key);
-                        auto hsIt = holdStates.find(key);
-                        if (hsIt != holdStates.end() && hsIt->second == HoldState::Holding)
-                            hsIt->second = HoldState::Idle;
-                        it = demoNoteOffTimes.erase(it);
-                    } else {
-                        ++it;
-                    }
-                }
-            } else {
-                // Ao terminar em demo, aguarda 2.5s suavemente e reinicia limpo
-                demoRestartTimer += rawDt;
-                if (demoRestartTimer >= 2.5) {
-                    demoRestartTimer = 0.0;
-                    hasFinished = false;
-                    g_synth.allNotesOff();
-                    songMode->restart();
-                    demoAutoPlayed.clear();
-                    demoNoteOffTimes.clear();
-                    heldKeys.clear();
-                    holdStates.clear();
-                    soundingPitch.clear();
-                    resyncAudioClock(0.0, kLeadIn);
-                }
+        // Se o modo demo terminou, aguarda 2.5s suavemente e reinicia limpo
+        if (demoMode && currentMode == GameMode::SongMode && hasFinished) {
+            demoRestartTimer += rawDt;
+            if (demoRestartTimer >= 2.5) {
+                demoRestartTimer = 0.0;
+                hasFinished = false;
+                g_synth.allNotesOff();
+                songMode->restart();
+                demoCursor = 0;
+                demoLastHitTime = -1.0;
+                demoNoteOffTimes.clear();
+                heldKeys.clear();
+                holdStates.clear();
+                soundingPitch.clear();
+                resyncAudioClock(0.0, kLeadIn);
             }
         }
 
@@ -1039,7 +1084,7 @@ int main(int, char*[]) {
         if (currentMode==GameMode::FreePlay) {
             renderText(ren, fontMedium, "♪  FREE PLAY — Toque Livre", 18, 6, {100,200,255,255});
             renderText(ren, fontSmall,
-                "[F2-F8] Músicas  [1/2/3] Dificuldade  [TAB] Próxima  [F1] Song Mode  [ESC] Sair",
+                "[F2-F9] Músicas  [1/2/3] Dificuldade  [TAB] Próxima  [F1] Song Mode  [ESC] Sair",
                 18, 34, {100,120,165,255});
         } else {
             const Song& song = getActiveSong();
@@ -1064,7 +1109,7 @@ int main(int, char*[]) {
 
             // Linha 3 (menor): Navegação compacta — abaixo do compositor, restrita à metade esquerda
             std::ostringstream nav;
-            nav << "[F2-F8] Musica  [1/2/3] Dif  [TAB] Prox  [-/+] Queda:"
+            nav << "[F2-F9] Musica  [1/2/3] Dif  [TAB] Prox  [-/+] Queda:"
                 << std::fixed << std::setprecision(1) << lookahead << "s  [Enter] Reiniciar  [F10] Guia  [F11] Acomp  [F12] DEMO";
             renderText(ren, fontTiny, nav.str(), 18, 48, {80,95,145,200});
         }

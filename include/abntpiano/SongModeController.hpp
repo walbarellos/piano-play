@@ -76,6 +76,8 @@ private:
     // Rastreamento por grupo
     std::vector<bool> isGroupJudged_;
     std::vector<std::vector<KeyInputEvent>> groupInputs_;
+    size_t unjudgedCount_ = 0;
+    size_t firstUnjudgedIdx_ = 0;
 
     JudgementCallback judgementCb_;
     FinishedCallback finishedCb_;
