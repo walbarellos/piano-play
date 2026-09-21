@@ -114,6 +114,7 @@ private:
     std::string currentPhrase_;
     double phraseExpireTime_ = 0.0;
     size_t phraseIndex_ = 0;
+    bool showShortcutsOverlay_ = false;
 };
 
 } // namespace abntpiano

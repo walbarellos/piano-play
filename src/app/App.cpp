@@ -59,7 +59,7 @@ bool App::init() {
     }
 
     window_ = SDL_CreateWindow(
-        "ABNT Piano  ♪  [F2–F8] Músicas  |  [1–3] Dificuldade  |  [F1] Free Play  |  [F12] Demo",
+        "ABNT Piano  [F2-F8] Musicas | [1-3] Dificuldade | [F1] Free Play | [F12] Demo | [?] Atalhos",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         ui::kScreenWidth, ui::kScreenHeight,
         SDL_WINDOW_SHOWN
@@ -196,8 +196,17 @@ void App::reloadChart() {
 }
 
 void App::handleKeyDown(SDL_Keycode sym) {
+    if (sym == SDLK_SLASH || sym == SDLK_QUESTION) {
+        showShortcutsOverlay_ = !showShortcutsOverlay_;
+        return;
+    }
+
     if (sym == SDLK_ESCAPE) {
-        running_ = false;
+        if (showShortcutsOverlay_) {
+            showShortcutsOverlay_ = false;
+        } else {
+            running_ = false;
+        }
     } else if (sym == SDLK_F1) {
         currentMode_ = GameMode::FreePlay;
         synth_.allNotesOff();
@@ -303,6 +312,14 @@ void App::handleKeyUp(SDL_Keycode sym) {
 void App::handleEvent(const SDL_Event& ev) {
     if (ev.type == SDL_QUIT) {
         running_ = false;
+    } else if (ev.type == SDL_MOUSEBUTTONDOWN) {
+        if (ev.button.button == SDL_BUTTON_LEFT) {
+            if (ev.button.x <= 130 && ev.button.y <= ui::kHudHeight) {
+                showShortcutsOverlay_ = !showShortcutsOverlay_;
+            } else if (showShortcutsOverlay_) {
+                showShortcutsOverlay_ = false;
+            }
+        }
     } else if (ev.type == SDL_KEYDOWN && !ev.key.repeat) {
         handleKeyDown(ev.key.keysym.sym);
     } else if (ev.type == SDL_KEYUP) {
@@ -376,7 +393,7 @@ void App::update(double rawDt) {
 }
 
 void App::render() {
-    SDL_SetRenderDrawColor(renderer_, 8, 12, 22, 255);
+    SDL_SetRenderDrawColor(renderer_, 7, 5, 11, 255); // #07050B
     SDL_RenderClear(renderer_);
 
     std::vector<VisibleNote> visNotes;
@@ -392,15 +409,17 @@ void App::render() {
         }
     }
 
+    double playhead = songMode_ ? songMode_->playhead() : 0.0;
+
     if (currentMode_ == GameMode::SongMode) {
-        highwayRenderer_.render(renderer_, fonts_, keyboardRenderer_, visNotes, keysAtHitLine, lookahead_);
+        highwayRenderer_.render(renderer_, fonts_, keyboardRenderer_, visNotes, keysAtHitLine,
+                                keyFeedbacks_, lookahead_, playhead);
     }
 
     particles_.renderShockwaves(renderer_, ui::kHitY);
     particles_.renderParticles(renderer_);
     particles_.renderFloatingTexts(renderer_, fonts_.medium);
 
-    double playhead = songMode_ ? songMode_->playhead() : 0.0;
     keyboardRenderer_.render(renderer_, fonts_, freePlay_.mapper(),
                              heldKeys_, keysAtHitLine, keyFeedbacks_, holdStates_, playhead);
 
@@ -413,7 +432,7 @@ void App::render() {
     const ScoringEngine& sc = songMode_ ? songMode_->scoringEngine() : dummyScoring;
     hudRenderer_.render(renderer_, fonts_, getActiveSong(), currentDifficulty_, lookahead_,
                         sc, playhead, totalDuration, currentMode_ == GameMode::FreePlay,
-                        demoMode_, currentPhrase_, phraseExpireTime_);
+                        demoMode_, currentPhrase_, phraseExpireTime_, showShortcutsOverlay_);
 
     if (hasFinished_) {
         resultsOverlay_.render(renderer_, fonts_, finalSummary_);

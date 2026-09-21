@@ -1,7 +1,6 @@
 #include "abntpiano/ui/HudRenderer.hpp"
 #include <algorithm>
 #include <cmath>
-#include <cstring>
 #include <iomanip>
 #include <sstream>
 
@@ -13,137 +12,203 @@ void HudRenderer::render(SDL_Renderer* ren,
                          const FontCollection& fonts,
                          const Song& currentSong,
                          int currentDifficulty,
-                         double lookahead,
+                         double /*lookahead*/,
                          const ScoringEngine& scoring,
                          double playhead,
                          double totalSongDuration,
                          bool isFreePlay,
                          bool isDemoMode,
                          const std::string& comboPhrase,
-                         double phraseExpireTime) const {
-    // Fundo do HUD com gradiente
+                         double phraseExpireTime,
+                         bool showShortcutsOverlay) const {
+    // 1. Fundo do HUD com acabamento em ébano e friso de latão
     SDL_Rect hudBg{0, 0, kScreenWidth, kHudHeight};
-    renderGradientRect(ren, hudBg, {14, 18, 32, 255}, {10, 14, 26, 255});
-    SDL_SetRenderDrawColor(ren, 50, 70, 130, 255);
-    SDL_RenderDrawLine(ren, 0, kHudHeight, kScreenWidth, kHudHeight);
-    SDL_SetRenderDrawColor(ren, 70, 100, 180, 100);
+    SDL_SetRenderDrawColor(ren, 10, 7, 15, 255); // #0A070F
+    SDL_RenderFillRect(ren, &hudBg);
+
+    SDL_SetRenderDrawColor(ren, 199, 154, 74, 56); // rgba(199,154,74,.22)
     SDL_RenderDrawLine(ren, 0, kHudHeight - 1, kScreenWidth, kHudHeight - 1);
 
     if (isFreePlay) {
-        renderText(ren, fonts.medium, "♪  FREE PLAY — Toque Livre", 18, 6, {100, 200, 255, 255});
-        renderText(ren, fonts.small,
-            "[F2-F8] Músicas  [1/2/3] Dificuldade  [TAB] Próxima  [F1] Song Mode  [ESC] Sair",
-            18, 34, {100, 120, 165, 255});
+        renderText(ren, fonts.medium, "♪  FREE PLAY — Toque Livre", 26, 20, {239, 230, 214, 255});
+        renderText(ren, fonts.small, "Pressione [?] para atalhos", 26, 48, {110, 104, 128, 255});
+        if (showShortcutsOverlay) renderShortcutsOverlay(ren, fonts);
         return;
     }
 
-    renderSongInfo(ren, fonts, currentSong, currentDifficulty, lookahead);
-    renderStats(ren, fonts, scoring, playhead, isDemoMode);
+    renderSongInfo(ren, fonts, currentSong, currentDifficulty, isDemoMode);
+    renderStats(ren, fonts, scoring);
     renderProgressBar(ren, playhead, totalSongDuration);
 
-    // Combo phrase centralizada
+    // Frase de combo temporária
     if (!comboPhrase.empty() && phraseExpireTime > playhead) {
         float t = static_cast<float>(std::min(1.0, phraseExpireTime - playhead));
         Uint8 a = static_cast<Uint8>(t * 255.0f);
-        renderText(ren, fonts.small, "★ " + comboPhrase + " ★", kScreenWidth / 2, 8, {255, 215, 0, a}, true);
+        renderText(ren, fonts.small, "★ " + comboPhrase + " ★", kScreenWidth / 2, 16, {199, 154, 74, a}, true);
+    }
+
+    if (showShortcutsOverlay) {
+        renderShortcutsOverlay(ren, fonts);
     }
 }
 
 void HudRenderer::renderSongInfo(SDL_Renderer* ren, const FontCollection& fonts, const Song& song,
-                                 int difficulty, double lookahead) const {
-    renderText(ren, fonts.medium, "♪  " + song.title, 18, 4, {255, 215, 0, 255});
-    renderText(ren, fonts.tiny, song.composer, 18, 30, {160, 165, 200, 200});
+                                 int difficulty, bool isDemoMode) const {
+    // Título da música
+    renderText(ren, fonts.medium, song.title, 26, 14, {239, 230, 214, 255}); // #EFE6D6
 
-    const char* diffName = (difficulty == 1) ? "EASY" : (difficulty == 2) ? "NORMAL" : "HARD";
-    SDL_Color diffBadgeCol =
-        (difficulty == 1) ? SDL_Color{30, 200, 100, 255} :
-        (difficulty == 2) ? SDL_Color{70, 180, 255, 255} :
-                            SDL_Color{255, 140, 40, 255};
+    // Compositor / Artista
+    std::string comp = song.composer.empty() ? "Tradicional" : song.composer;
+    renderText(ren, fonts.small, comp, 26, 42, {110, 104, 128, 255}); // #6E6880
 
-    int badgeX = 430;
-    SDL_Rect badgeBg{badgeX, 6, static_cast<int>(std::strlen(diffName) * 9 + 18), 22};
-    SDL_SetRenderDrawColor(ren, diffBadgeCol.r / 5, diffBadgeCol.g / 5, diffBadgeCol.b / 5, 220);
-    SDL_RenderFillRect(ren, &badgeBg);
-    SDL_SetRenderDrawColor(ren, diffBadgeCol.r, diffBadgeCol.g, diffBadgeCol.b, 255);
-    SDL_RenderDrawRect(ren, &badgeBg);
-    renderText(ren, fonts.small, diffName, badgeX + 8, 10, diffBadgeCol);
+    // Pílula de dificuldade colocada imediatamente após o nome do compositor
+    int compW = static_cast<int>(comp.size() * 8 + 8);
+    int pillX = 26 + compW + 12;
+    int pillY = 40;
+    int pillW = 54;
+    int pillH = 19;
 
-    std::ostringstream nav;
-    nav << "[F2-F8] Musica  [1/2/3] Dif  [TAB] Prox  [-/+] Queda:"
-        << std::fixed << std::setprecision(1) << lookahead << "s  [Enter] Reiniciar  [F10] Guia  [F11] Acomp  [F12] DEMO";
-    renderText(ren, fonts.tiny, nav.str(), 18, 48, {80, 95, 145, 200});
+    const char* diffLabel = (difficulty == 1) ? "FÁCIL" : (difficulty == 2) ? "MÉDIO" : "DIFÍCIL";
+    renderCapsuleOutline(ren, static_cast<float>(pillX), static_cast<float>(pillY),
+                         static_cast<float>(pillW), static_cast<float>(pillH),
+                         {199, 154, 74, 128}); // rgba(199,154,74,.5)
+
+    renderText(ren, fonts.tiny, diffLabel, pillX + pillW / 2, pillY + pillH / 2,
+               {199, 154, 74, 255}, true); // #C79A4A
+
+    // Indicador DEMO
+    if (isDemoMode) {
+        int demoX = pillX + pillW + 12;
+        int demoW = 105;
+        int demoH = 20;
+        SDL_Color demoCol{155, 47, 176, 255}; // #9B2FB0
+        renderCapsule(ren, static_cast<float>(demoX), static_cast<float>(pillY),
+                      static_cast<float>(demoW), static_cast<float>(demoH),
+                      {60, 20, 75, 200}, {60, 20, 75, 200});
+        renderCapsuleOutline(ren, static_cast<float>(demoX), static_cast<float>(pillY),
+                             static_cast<float>(demoW), static_cast<float>(demoH),
+                             demoCol);
+        renderText(ren, fonts.tiny, "◉ DEMO [F12]", demoX + demoW / 2, pillY + demoH / 2,
+                   {255, 220, 255, 255}, true);
+    }
+
+    // Indicador discreto de atalhos
+    renderText(ren, fonts.tiny, "?  atalhos", 26, kHudHeight - 16, {74, 68, 88, 255}); // #4A4458
 }
 
-void HudRenderer::renderStats(SDL_Renderer* ren, const FontCollection& fonts, const ScoringEngine& scoring,
-                              double playhead, bool isDemoMode) const {
-    int64_t score = scoring.currentScore();
-    int combo     = scoring.currentCombo();
-    float acc     = scoring.currentAccuracy() * 100.0f;
-    std::string grade = gradeToString(scoring.currentGrade());
+void HudRenderer::renderStats(SDL_Renderer* ren, const FontCollection& fonts, const ScoringEngine& scoring) const {
+    int judged = scoring.perfectCount() + scoring.greatCount() + scoring.goodCount() + scoring.missCount();
 
-    SDL_SetRenderDrawColor(ren, 15, 20, 40, 160);
-    SDL_Rect statsBg{kScreenWidth - 470, 1, 468, kHudHeight - 2};
-    SDL_RenderFillRect(ren, &statsBg);
-    SDL_SetRenderDrawColor(ren, 40, 55, 95, 180);
-    SDL_RenderDrawLine(ren, kScreenWidth - 470, 1, kScreenWidth - 470, kHudHeight - 2);
+    std::string strScore = std::to_string(scoring.currentScore());
+    std::string strCombo = (judged > 0 && scoring.currentCombo() > 0) ? ("×" + std::to_string(scoring.currentCombo())) : "—";
 
-    const int COL_SCORE = kScreenWidth - 455;
-    const int COL_COMBO = kScreenWidth - 330;
-    const int COL_ACC   = kScreenWidth - 195;
-    const int COL_GRADE = kScreenWidth - 60;
-
-    // SCORE
-    renderText(ren, fonts.tiny, "SCORE", COL_SCORE, 5, {110, 130, 185, 200});
-    renderText(ren, fonts.large, std::to_string(score), COL_SCORE, 20, {240, 245, 255, 255});
-
-    // COMBO
-    SDL_Color comboCol = (combo >= 10) ? SDL_Color{255, 150, 30, 255} : SDL_Color{70, 200, 255, 255};
-    renderText(ren, fonts.tiny, "COMBO", COL_COMBO, 5, {110, 130, 185, 200});
-    renderText(ren, fonts.large, "x" + std::to_string(combo), COL_COMBO, 20, comboCol);
-
-    // ACCURACY
-    SDL_Color accCol = (acc >= 95.0f) ? SDL_Color{30, 255, 120, 255} :
-                       (acc >= 70.0f) ? SDL_Color{220, 220, 60, 255} :
-                                        SDL_Color{220, 100, 60, 255};
-    renderText(ren, fonts.tiny, "PRECISAO", COL_ACC, 5, {110, 130, 185, 200});
     std::ostringstream accStream;
-    accStream << std::fixed << std::setprecision(1) << acc << "%";
-    renderText(ren, fonts.large, accStream.str(), COL_ACC, 20, accCol);
+    if (judged > 0) {
+        accStream << std::fixed << std::setprecision(1) << (scoring.currentAccuracy() * 100.0f) << "%";
+    } else {
+        accStream << "—";
+    }
+    std::string strAcc = accStream.str();
+    std::string strGrade = (judged > 0) ? gradeToString(scoring.currentGrade()) : "—";
 
-    // GRADE
-    SDL_Color gradeCol =
-        (grade == "S") ? SDL_Color{255, 200, 0, 255} :
-        (grade == "A") ? SDL_Color{60, 220, 120, 255} :
-        (grade == "B") ? SDL_Color{70, 180, 255, 255} :
-        (grade == "C") ? SDL_Color{200, 180, 60, 255} :
-                         SDL_Color{200, 80, 80, 255};
-    renderText(ren, fonts.tiny, "GRADE", COL_GRADE, 5, {110, 130, 185, 200});
-    renderText(ren, fonts.large, grade, COL_GRADE, 20, gradeCol);
+    struct StatItem {
+        std::string label;
+        std::string value;
+    };
 
-    // DEMO indicator
-    if (isDemoMode) {
-        bool blinkOn = (std::fmod(playhead, 0.5) < 0.35);
-        if (blinkOn) {
-            SDL_Rect demoBg{kScreenWidth / 2 - 68, 6, 136, 28};
-            SDL_SetRenderDrawColor(ren, 180, 30, 220, 220);
-            SDL_RenderFillRect(ren, &demoBg);
-            SDL_SetRenderDrawColor(ren, 255, 100, 255, 255);
-            SDL_RenderDrawRect(ren, &demoBg);
-            renderText(ren, fonts.small, "◉ DEMO [F12]", kScreenWidth / 2, 20, {255, 255, 255, 255}, true);
-        }
+    std::vector<StatItem> stats = {
+        {"Pontos",   strScore},
+        {"Combo",    strCombo},
+        {"Precisão", strAcc},
+        {"Nota",     strGrade}
+    };
+
+    int curX = kScreenWidth - 28;
+    for (int i = static_cast<int>(stats.size()) - 1; i >= 0; i--) {
+        const auto& item = stats[i];
+        int valW = 0, lblW = 0;
+        if (fonts.large) TTF_SizeUTF8(fonts.large, item.value.c_str(), &valW, nullptr);
+        if (fonts.tiny)  TTF_SizeUTF8(fonts.tiny,  item.label.c_str(), &lblW, nullptr);
+        int colW = std::max(valW, lblW);
+
+        // Valor em grande destaque (#EFE6D6)
+        renderTextRight(ren, fonts.large, item.value, curX, 14, {239, 230, 214, 255});
+
+        // Label secundário (#6E6880)
+        renderTextRight(ren, fonts.tiny, item.label, curX, 48, {110, 104, 128, 255});
+
+        curX -= (colW + 44);
     }
 }
 
 void HudRenderer::renderProgressBar(SDL_Renderer* ren, double playhead, double totalDuration) const {
     if (totalDuration <= 0.0) return;
-    double progress = std::clamp(playhead / totalDuration, 0.0, 1.0);
-    int barX = 18, barY = kHudHeight - 7, barW = kScreenWidth - 36, barH = 4;
-    SDL_SetRenderDrawColor(ren, 30, 40, 65, 255);
-    SDL_Rect bgBar{barX, barY, barW, barH};
-    SDL_RenderFillRect(ren, &bgBar);
-    SDL_SetRenderDrawColor(ren, 255, 215, 0, 200);
-    SDL_Rect progBar{barX, barY, static_cast<int>(barW * progress), barH};
-    SDL_RenderFillRect(ren, &progBar);
+    float prog = static_cast<float>(std::clamp(playhead / totalDuration, 0.0, 1.0));
+
+    // Base da barra de progresso (4px de altura)
+    int barY = kHudHeight - 4;
+    int barH = 4;
+
+    // Trilho de fundo
+    SDL_Rect track{0, barY, kScreenWidth, barH};
+    SDL_SetRenderDrawColor(ren, 239, 230, 214, 18); // rgba(239,230,214,.07)
+    SDL_RenderFillRect(ren, &track);
+
+    // Barra de feltro vermelho
+    int fillW = static_cast<int>(static_cast<float>(kScreenWidth) * prog);
+    if (fillW > 0) {
+        SDL_Rect barFill{0, barY, fillW, barH};
+        SDL_SetRenderDrawColor(ren, 179, 46, 66, 255); // #B32E42
+        SDL_RenderFillRect(ren, &barFill);
+    }
+}
+
+void HudRenderer::renderShortcutsOverlay(SDL_Renderer* ren, const FontCollection& fonts) const {
+    // Backdrop escuro semitransparente
+    SDL_Rect backdrop{0, 0, kScreenWidth, kScreenHeight};
+    SDL_SetRenderDrawColor(ren, 7, 5, 11, 230);
+    SDL_RenderFillRect(ren, &backdrop);
+
+    // Cartão central
+    int cardW = 540;
+    int cardH = 390;
+    int cardX = (kScreenWidth - cardW) / 2;
+    int cardY = (kScreenHeight - cardH) / 2;
+
+    SDL_Color cardBg{18, 14, 26, 255};
+    renderRoundRectSelective(ren, static_cast<float>(cardX), static_cast<float>(cardY),
+                             static_cast<float>(cardW), static_cast<float>(cardH),
+                             8.0f, 8.0f, cardBg, cardBg);
+
+    // Moldura dourada
+    SDL_SetRenderDrawColor(ren, 199, 154, 74, 180);
+    SDL_Rect cardRect{cardX, cardY, cardW, cardH};
+    SDL_RenderDrawRect(ren, &cardRect);
+
+    // Título do modal
+    renderText(ren, fonts.medium, "ATALHOS DO TECLADO", cardX + cardW / 2, cardY + 22, {239, 230, 214, 255}, true);
+
+    const std::pair<std::string, std::string> shortcuts[] = {
+        {"F2 – F8",       "Escolher música do repertório"},
+        {"TAB",           "Alternar para a próxima música"},
+        {"1 / 2 / 3",     "Dificuldade: Fácil / Normal / Difícil"},
+        {"F12",           "Ligar/desligar modo DEMO"},
+        {"- / +",         "Ajustar velocidade de queda das notas"},
+        {"[ / ]",         "Ajustar andamento de reprodução"},
+        {"F10 / F11",     "Alternar Guia de Melodia / Acompanhamento"},
+        {"Enter",         "Reiniciar peça do início"},
+        {"F1",            "Modo Free Play (tocar livremente)"},
+        {"ESC",           "Sair do jogo / Fechar menu"}
+    };
+
+    int startY = cardY + 68;
+    for (const auto& item : shortcuts) {
+        renderText(ren, fonts.small, item.first, cardX + 36, startY, {199, 154, 74, 255}, false);
+        renderText(ren, fonts.small, item.second, cardX + 175, startY, {220, 214, 230, 255}, false);
+        startY += 26;
+    }
+
+    renderText(ren, fonts.tiny, "Pressione [?] ou [ESC] para fechar", cardX + cardW / 2, cardY + cardH - 24, {110, 104, 128, 255}, true);
 }
 
 } // namespace abntpiano::ui

@@ -22,13 +22,15 @@ public:
                 bool isFreePlay,
                 bool isDemoMode,
                 const std::string& comboPhrase,
-                double phraseExpireTime) const;
+                double phraseExpireTime,
+                bool showShortcutsOverlay = false) const;
+
+    void renderShortcutsOverlay(SDL_Renderer* ren, const FontCollection& fonts) const;
 
 private:
     void renderSongInfo(SDL_Renderer* ren, const FontCollection& fonts, const Song& song,
-                        int difficulty, double lookahead) const;
-    void renderStats(SDL_Renderer* ren, const FontCollection& fonts, const ScoringEngine& scoring,
-                     double playhead, bool isDemoMode) const;
+                        int difficulty, bool isDemoMode) const;
+    void renderStats(SDL_Renderer* ren, const FontCollection& fonts, const ScoringEngine& scoring) const;
     void renderProgressBar(SDL_Renderer* ren, double playhead, double totalDuration) const;
 };
 

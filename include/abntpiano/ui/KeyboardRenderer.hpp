@@ -15,7 +15,7 @@ struct KeyFeedback {
 
 class KeyboardRenderer {
 public:
-    KeyboardRenderer();
+    KeyboardRenderer() = default;
 
     SDL_Rect getKeyRect(char key) const;
     int getKeyCenterX(char key) const;
@@ -28,9 +28,6 @@ public:
                 const std::map<char, KeyFeedback>& feedbacks,
                 const std::map<char, HoldState>& holdStates,
                 double currentPlayhead) const;
-
-private:
-    int rowOffsets_[3];
 };
 
 } // namespace abntpiano::ui
