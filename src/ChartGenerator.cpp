@@ -98,14 +98,12 @@ Chart ChartGenerator::generateChart(
 
         // Redução de tamanho de acorde se exceder maxChordSize (RF14)
         if (difficulty.maxChordSize > 0 && notes.size() > static_cast<size_t>(difficulty.maxChordSize)) {
-            // Prioriza notas de maior duração e maior velocity (ADR-03)
+            // Prioriza a melodia principal (nota mais aguda / soprano = maior midiNote)
             std::sort(notes.begin(), notes.end(), [](const NoteEvent& a, const NoteEvent& b) {
-                double scoreA = a.duration * static_cast<double>(a.velocity);
-                double scoreB = b.duration * static_cast<double>(b.velocity);
-                if (std::abs(scoreA - scoreB) > 1e-4) {
-                    return scoreA > scoreB;
+                if (a.midiNote != b.midiNote) {
+                    return a.midiNote > b.midiNote; // Melodia cantável tem prioridade máxima
                 }
-                return a.midiNote < b.midiNote;
+                return a.duration > b.duration;
             });
             notes.resize(difficulty.maxChordSize);
         }
