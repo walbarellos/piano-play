@@ -8,6 +8,7 @@ namespace abntpiano {
 SongModeController::SongModeController(Chart chart)
     : chart_(std::move(chart)) {
     isGroupJudged_.resize(chart_.playableEvents.size(), false);
+    groupJudgements_.resize(chart_.playableEvents.size(), JudgementType::Miss);
     groupInputs_.resize(chart_.playableEvents.size());
     unjudgedCount_ = chart_.playableEvents.size();
     firstUnjudgedIdx_ = 0;
@@ -18,6 +19,7 @@ void SongModeController::start() {
     playhead_ = 0.0;
     scoring_.reset();
     std::fill(isGroupJudged_.begin(), isGroupJudged_.end(), false);
+    std::fill(groupJudgements_.begin(), groupJudgements_.end(), JudgementType::Miss);
     for (auto& inputs : groupInputs_) {
         inputs.clear();
     }
@@ -86,6 +88,7 @@ void SongModeController::checkExpiredNotes() {
             );
 
             isGroupJudged_[i] = true;
+            groupJudgements_[i] = judgement.type;
             if (unjudgedCount_ > 0) --unjudgedCount_;
             scoring_.registerJudgement(judgement);
 
@@ -150,6 +153,7 @@ void SongModeController::onKeyDown(char key) {
         // Se o grupo foi acertado integralmente ou atingiu critério parcial (Easy), finaliza o grupo
         if (judgement.type != JudgementType::Miss) {
             isGroupJudged_[idx] = true;
+            groupJudgements_[idx] = judgement.type;
             if (unjudgedCount_ > 0) --unjudgedCount_;
             scoring_.registerJudgement(judgement);
             if (judgementCb_) {
@@ -184,6 +188,7 @@ void SongModeController::triggerDemoHit(size_t groupIndex, JudgementType type, d
     };
 
     isGroupJudged_[groupIndex] = true;
+    groupJudgements_[groupIndex] = type;
     if (unjudgedCount_ > 0) --unjudgedCount_;
     scoring_.registerJudgement(judgement);
 
@@ -215,7 +220,8 @@ std::vector<VisibleNote> SongModeController::getVisibleNotes(double lookaheadSec
                 .keys = ev.keys,
                 .durations = ev.durations,
                 .midiNotes = ev.midiNotes,
-                .isJudged = isGroupJudged_[i]
+                .isJudged = isGroupJudged_[i],
+                .judgement = groupJudgements_[i]
             });
         }
     }

@@ -10,12 +10,14 @@ void HighwayRenderer::render(SDL_Renderer* ren,
                              const std::vector<VisibleNote>& visNotes,
                              const std::set<char>& keysAtHitLine,
                              const std::map<char, KeyFeedback>& feedbacks,
+                             const std::set<char>& heldKeys,
+                             const std::map<char, HoldState>& holdStates,
                              double lookahead,
                              double playhead) const {
     renderPlayfieldBackground(ren, visNotes);
     renderLanes(ren);
-    renderNotes(ren, fonts, visNotes, lookahead);
-    renderFeltRail(ren, keysAtHitLine, feedbacks, playhead);
+    renderNotes(ren, fonts, visNotes, heldKeys, holdStates, lookahead, playhead);
+    renderFeltRail(ren, keysAtHitLine, feedbacks, heldKeys, holdStates, playhead);
 }
 
 void HighwayRenderer::renderPlayfieldBackground(SDL_Renderer* ren, const std::vector<VisibleNote>& visNotes) const {
@@ -88,13 +90,18 @@ void HighwayRenderer::renderLanes(SDL_Renderer* ren) const {
 }
 
 void HighwayRenderer::renderNotes(SDL_Renderer* ren, const FontCollection& fonts,
-                                  const std::vector<VisibleNote>& visNotes, double lookahead) const {
+                                  const std::vector<VisibleNote>& visNotes,
+                                  const std::set<char>& heldKeys,
+                                  const std::map<char, HoldState>& holdStates,
+                                  double lookahead, double playhead) const {
+    (void)playhead;
     for (const auto& vn : visNotes) {
         double ttl = vn.timeToHit;
-        if (ttl > lookahead || ttl < -0.45) continue;
+        bool isHit = vn.isJudged && (vn.judgement != JudgementType::Miss);
+        bool isMissed = vn.isJudged && (vn.judgement == JudgementType::Miss);
 
-        // Barra de conexão de acordes simultâneos
-        if (vn.keys.size() > 1 && !vn.isJudged) {
+        // Barra de conexão de acordes simultâneos (apenas enquanto o acorde não foi acertado)
+        if (vn.keys.size() > 1 && !isHit && ttl >= 0.0) {
             float minX = static_cast<float>(kScreenWidth), maxX = 0.0f;
             float chordY = 0.0f;
             for (char kChar : vn.keys) {
@@ -119,73 +126,199 @@ void HighwayRenderer::renderNotes(SDL_Renderer* ren, const FontCollection& fonts
             if (!k) continue;
 
             double dur = (idx < vn.durations.size()) ? vn.durations[idx] : 0.3;
-            float f = static_cast<float>(ttl / lookahead);
-            float y = static_cast<float>(kHorizonY) + (1.0f - f) * static_cast<float>(kSpanY);
-            float f2 = static_cast<float>(std::min(1.0, (ttl + dur) / lookahead));
-            float yT = static_cast<float>(kHorizonY) + (1.0f - f2) * static_cast<float>(kSpanY);
-
-            float s = persp(std::max(0.0f, f));
-            float w = k->w * s * 0.86f;
-            float h = std::max(15.0f, y - yT);
-            float x = k->x - w / 2.0f;
-            float top = y - h;
-
             bool isLong = (dur > 0.32);
+            char normKey = static_cast<char>(std::toupper(static_cast<unsigned char>(keyChar)));
+
+            auto itHold = holdStates.find(normKey);
+            bool isHolding = (heldKeys.count(normKey) > 0 ||
+                             (itHold != holdStates.end() && itHold->second == HoldState::Holding));
+
             float hue = pitchHue(k->pc);
-            float near = std::max(0.0f, 1.0f - std::abs(static_cast<float>(ttl)) / 0.28f);
 
-            // 1. Rastro de movimento (3 cópias fantasma atrás no tempo)
-            for (int gg = 3; gg >= 1; gg--) {
-                double gttl = ttl + static_cast<double>(gg) * 0.055;
-                if (gttl > lookahead || gttl < 0.0) continue;
-                float gf = static_cast<float>(gttl / lookahead);
-                float gy = static_cast<float>(kHorizonY) + (1.0f - gf) * static_cast<float>(kSpanY);
-                float gs = persp(gf);
-                float gw = k->w * gs * 0.86f * 0.70f;
-                Uint8 trailAlpha = static_cast<Uint8>(255.0f * 0.05f * static_cast<float>(4 - gg));
-                SDL_Color trailCol = hslToRgb(hue, 55.0f, k->isSharp ? 32.0f : 70.0f, trailAlpha);
-                renderCapsule(ren, k->x - gw / 2.0f, gy - 6.0f, gw, 12.0f, trailCol, trailCol);
-            }
+            // ── NOTAS CURTAS (dur <= 0.32) ──────────────────────────
+            if (!isLong) {
+                // Se foi acertada e pressionada:
+                if (isHit) {
+                    // Flash imediato no momento do acerto (dentro dos primeiros 80ms)
+                    if (ttl < -0.08) {
+                        // DESAPARECE DA PISTA! Fim da corrida após ser pressionada.
+                        continue;
+                    }
 
-            // 2. Halo de aproximação nos últimos 280ms
-            if (near > 0.0f) {
-                Uint8 glowAlpha = static_cast<Uint8>(near * 90.0f);
-                renderGlowDisc(ren, k->x, y - h * 0.5f, std::max(w, 26.0f) * 1.25f,
-                               hslToRgb(hue, 70.0f, 68.0f, glowAlpha),
-                               hslToRgb(hue, 70.0f, 68.0f, 0));
-            }
+                    // Efeito de impacto no momento exato em que foi pressionada: muda de cor para brilho dourado/branco
+                    float flashW = k->w * 0.90f;
+                    float flashX = k->x - flashW / 2.0f;
+                    float flashY = static_cast<float>(kHitY) - 14.0f;
+                    SDL_Color flashTop{255, 255, 235, 255};
+                    SDL_Color flashBot = hslToRgb(hue, 95.0f, 75.0f, 255);
+                    renderCapsule(ren, flashX, flashY, flashW, 16.0f, flashTop, flashBot);
+                    renderGlowDisc(ren, k->x, static_cast<float>(kHitY), flashW * 1.2f,
+                                   {255, 255, 255, 220}, hslToRgb(hue, 90.0f, 70.0f, 0));
+                    continue;
+                }
 
-            // 3. Corpo em cápsula completa
-            SDL_Color topCol = k->isSharp ? hslToRgb(hue, 42.0f, 20.0f) : hslToRgb(hue, 46.0f, 46.0f);
-            SDL_Color botCol = k->isSharp ? hslToRgb(hue, 52.0f, 58.0f) : hslToRgb(hue, 72.0f, 86.0f);
-            renderCapsule(ren, x, top, w, h, topCol, botCol);
+                // Se passou da linha sem ser pressionada (Miss):
+                if (isMissed) {
+                    if (ttl < -0.22) continue; // Desaparece rapidamente após o erro
+                }
 
-            // 4. Notas longas: faixa central e hachuras de sustentação
-            if (isLong && h > 34.0f) {
-                float cx = x + w / 2.0f;
-                float stripeW = std::max(2.0f, w * 0.10f);
-                renderCapsule(ren, cx - stripeW / 2.0f, top + 8.0f, stripeW, h - 16.0f,
-                              {255, 255, 255, 36}, {255, 255, 255, 36});
+                if (ttl > lookahead) continue;
 
-                SDL_Color hatchCol = k->isSharp ? SDL_Color{10, 14, 22, 56} : hslToRgb(hue, 60.0f, 30.0f, 36);
-                SDL_SetRenderDrawColor(ren, hatchCol.r, hatchCol.g, hatchCol.b, hatchCol.a);
-                for (float hy = top + 14.0f; hy < y - 14.0f; hy += 9.0f) {
-                    SDL_RenderDrawLineF(ren, x + 3.0f, hy, x + w - 3.0f, hy + 6.0f);
+                // Nota curta descendo normalmente antes do impacto
+                float f = static_cast<float>(ttl / lookahead);
+                float y = static_cast<float>(kHorizonY) + (1.0f - f) * static_cast<float>(kSpanY);
+                float s = persp(std::max(0.0f, f));
+                float w = k->w * s * 0.86f;
+                float h = 18.0f;
+                float x = k->x - w / 2.0f;
+                float top = y - h;
+                float near = std::max(0.0f, 1.0f - std::abs(static_cast<float>(ttl)) / 0.28f);
+
+                // Rastro fantasma sutil
+                for (int gg = 3; gg >= 1; gg--) {
+                    double gttl = ttl + static_cast<double>(gg) * 0.055;
+                    if (gttl > lookahead || gttl < 0.0) continue;
+                    float gf = static_cast<float>(gttl / lookahead);
+                    float gy = static_cast<float>(kHorizonY) + (1.0f - gf) * static_cast<float>(kSpanY);
+                    float gs = persp(gf);
+                    float gw = k->w * gs * 0.86f * 0.70f;
+                    Uint8 trailAlpha = static_cast<Uint8>(255.0f * 0.04f * static_cast<float>(4 - gg));
+                    SDL_Color trailCol = hslToRgb(hue, 55.0f, k->isSharp ? 32.0f : 70.0f, trailAlpha);
+                    renderCapsule(ren, k->x - gw / 2.0f, gy - 6.0f, gw, 12.0f, trailCol, trailCol);
+                }
+
+                // Glow de aproximação
+                if (near > 0.0f) {
+                    Uint8 glowAlpha = static_cast<Uint8>(near * 85.0f);
+                    renderGlowDisc(ren, k->x, y - h * 0.5f, std::max(w, 24.0f) * 1.25f,
+                                   hslToRgb(hue, 70.0f, 68.0f, glowAlpha),
+                                   hslToRgb(hue, 70.0f, 68.0f, 0));
+                }
+
+                // Cor da nota
+                SDL_Color topCol, botCol;
+                if (isMissed) {
+                    topCol = SDL_Color{50, 25, 30, 110};
+                    botCol = SDL_Color{80, 30, 40, 130};
+                } else {
+                    topCol = k->isSharp ? hslToRgb(hue, 42.0f, 20.0f) : hslToRgb(hue, 46.0f, 46.0f);
+                    botCol = k->isSharp ? hslToRgb(hue, 52.0f, 58.0f) : hslToRgb(hue, 72.0f, 86.0f);
+                }
+
+                renderCapsule(ren, x, top, w, h, topCol, botCol);
+
+                // Highlight radial de impacto na base da cápsula
+                renderGlowDisc(ren, k->x, y - 6.0f, std::max(w * 0.8f, 20.0f),
+                               hslToRgb(hue, 20.0f, 96.0f, 130),
+                               hslToRgb(hue, 20.0f, 96.0f, 0));
+
+                // Letra
+                if (w > 20.0f) {
+                    SDL_Color letterCol = k->isSharp ? hslToRgb(hue, 30.0f, 94.0f, 235) : hslToRgb(hue, 55.0f, 16.0f, 184);
+                    std::string chStr(1, k->ch);
+                    renderText(ren, (s > 0.8f) ? fonts.small : fonts.tiny,
+                               chStr, static_cast<int>(k->x), static_cast<int>(y - 11.0f),
+                               letterCol, true);
                 }
             }
+            // ── NOTAS LONGAS (dur > 0.32) ───────────────────────────
+            else {
+                // Se o hold já foi completado no tempo (passou da duração total):
+                if (ttl + dur <= 0.0) {
+                    // Nota longa concluída e consumida, desaparece da pista
+                    continue;
+                }
 
-            // 5. Highlight radial de impacto na base da cápsula
-            renderGlowDisc(ren, k->x, y - std::min(h, 20.0f) * 0.4f, std::max(w * 0.8f, 22.0f),
-                           hslToRgb(hue, 20.0f, 96.0f, 130),
-                           hslToRgb(hue, 20.0f, 96.0f, 0));
+                if (ttl > lookahead) continue;
 
-            // 6. Legenda da tecla na nota
-            if (w > 20.0f && h > 18.0f) {
-                SDL_Color letterCol = k->isSharp ? hslToRgb(hue, 30.0f, 94.0f, 235) : hslToRgb(hue, 55.0f, 16.0f, 184);
-                std::string chStr(1, k->ch);
-                renderText(ren, (s > 0.8f) ? fonts.small : fonts.tiny,
-                           chStr, static_cast<int>(k->x), static_cast<int>(y - std::min(h, 26.0f) / 2.0f - 2),
-                           letterCol, true);
+                // Geometria da nota longa:
+                // Quando a cabeça atinge a linha de impacto (ttl <= 0.0), a base FICA PRESA em kHitY
+                // e não avança tela abaixo; a cauda continua descendo em direção à linha.
+                float y = (ttl <= 0.0) ? static_cast<float>(kHitY) :
+                                         static_cast<float>(kHorizonY) + (1.0f - static_cast<float>(ttl / lookahead)) * static_cast<float>(kSpanY);
+
+                float f2 = static_cast<float>(std::min(1.0, (ttl + dur) / lookahead));
+                float yT = static_cast<float>(kHorizonY) + (1.0f - f2) * static_cast<float>(kSpanY);
+
+                float s = persp(std::max(0.0f, static_cast<float>(std::max(0.0, ttl) / lookahead)));
+                float w = k->w * s * 0.86f;
+                float h = std::max(20.0f, y - yT);
+                float x = k->x - w / 2.0f;
+                float top = y - h;
+
+                // Fração de sustentação em tempo real
+                float elapsed = (ttl <= 0.0) ? static_cast<float>(-ttl) : 0.0f;
+                float holdProgress = std::clamp(elapsed / static_cast<float>(dur), 0.0f, 1.0f);
+
+                // MUDANÇA DE COR CONFORME PRESSIONAMENTO:
+                // Se o jogador acertou e está segurando ativamente: cor vibrante e energética (luminous hold)
+                SDL_Color topCol, botCol;
+                if (isHolding && ttl <= 0.0) {
+                    topCol = hslToRgb(hue, 90.0f, 65.0f);
+                    botCol = hslToRgb(hue, 100.0f, 85.0f);
+                } else if (isMissed || (!isHolding && ttl <= -0.15)) {
+                    // Soltou prematuramente ou errou: escurece para indicar interrupção
+                    topCol = SDL_Color{50, 25, 30, 120};
+                    botCol = SDL_Color{85, 40, 50, 140};
+                } else {
+                    // Descendo antes do impacto
+                    topCol = k->isSharp ? hslToRgb(hue, 42.0f, 20.0f) : hslToRgb(hue, 46.0f, 46.0f);
+                    botCol = k->isSharp ? hslToRgb(hue, 52.0f, 58.0f) : hslToRgb(hue, 72.0f, 86.0f);
+                }
+
+                // Corpo da cápsula longa
+                renderCapsule(ren, x, top, w, h, topCol, botCol);
+
+                // Faixa central e textura de sustentação
+                if (h > 30.0f) {
+                    float cx = x + w / 2.0f;
+                    float stripeW = std::max(2.0f, w * 0.10f);
+                    renderCapsule(ren, cx - stripeW / 2.0f, top + 8.0f, stripeW, h - 16.0f,
+                                  {255, 255, 255, 36}, {255, 255, 255, 36});
+
+                    SDL_Color hatchCol = isHolding ? hslToRgb(hue, 80.0f, 85.0f, 80) :
+                                                     (k->isSharp ? SDL_Color{10, 14, 22, 56} : hslToRgb(hue, 60.0f, 30.0f, 36));
+                    SDL_SetRenderDrawColor(ren, hatchCol.r, hatchCol.g, hatchCol.b, hatchCol.a);
+                    for (float hy = top + 14.0f; hy < y - 14.0f; hy += 9.0f) {
+                        SDL_RenderDrawLineF(ren, x + 3.0f, hy, x + w - 3.0f, hy + 6.0f);
+                    }
+                }
+
+                // ── PREENCHIMENTO EM TEMPO REAL CONFORME O JOGADOR APERTA ──
+                if (isHolding && ttl <= 0.0 && holdProgress > 0.01f) {
+                    float fillHeight = h * holdProgress;
+                    float fillTop = y - fillHeight;
+                    float fillW = w * 0.76f;
+                    float fillX = k->x - fillW / 2.0f;
+
+                    // Núcleo líquido elétrico de preenchimento
+                    SDL_Color coreTop{255, 255, 255, 240};
+                    SDL_Color coreBot = hslToRgb(hue, 100.0f, 90.0f, 255);
+                    renderCapsule(ren, fillX, fillTop, fillW, fillHeight, coreTop, coreBot);
+
+                    // Crista brilhante indicando a frente do preenchimento
+                    renderGlowDisc(ren, k->x, fillTop + 4.0f, fillW * 0.9f,
+                                   {255, 255, 255, 250}, hslToRgb(hue, 95.0f, 80.0f, 0));
+
+                    // Aura de sustentação contínua
+                    renderGlowDisc(ren, k->x, static_cast<float>(kHitY), w * 1.4f,
+                                   hslToRgb(hue, 100.0f, 80.0f, 140), hslToRgb(hue, 100.0f, 80.0f, 0));
+                }
+
+                // Highlight radial de impacto na base da cápsula
+                renderGlowDisc(ren, k->x, y - std::min(h, 20.0f) * 0.4f, std::max(w * 0.8f, 22.0f),
+                               hslToRgb(hue, 20.0f, 96.0f, 130),
+                               hslToRgb(hue, 20.0f, 96.0f, 0));
+
+                // Letra
+                if (w > 20.0f && h > 20.0f) {
+                    SDL_Color letterCol = isHolding ? SDL_Color{255, 255, 255, 255} :
+                                          (k->isSharp ? hslToRgb(hue, 30.0f, 94.0f, 235) : hslToRgb(hue, 55.0f, 16.0f, 184));
+                    std::string chStr(1, k->ch);
+                    renderText(ren, (s > 0.8f) ? fonts.small : fonts.tiny,
+                               chStr, static_cast<int>(k->x), static_cast<int>(y - std::min(h, 26.0f) / 2.0f - 2),
+                               letterCol, true);
+                }
             }
         }
     }
@@ -194,6 +327,8 @@ void HighwayRenderer::renderNotes(SDL_Renderer* ren, const FontCollection& fonts
 void HighwayRenderer::renderFeltRail(SDL_Renderer* ren,
                                      const std::set<char>& keysAtHitLine,
                                      const std::map<char, KeyFeedback>& feedbacks,
+                                     const std::set<char>& heldKeys,
+                                     const std::map<char, HoldState>& holdStates,
                                      double currentPlayhead) const {
     // 1. Trilho de feltro acústico
     SDL_Rect railBack{0, kHitY - 5, kScreenWidth, 10};
@@ -214,15 +349,24 @@ void HighwayRenderer::renderFeltRail(SDL_Renderer* ren,
         float ry = static_cast<float>(kHitY) - 3.5f;
 
         float hitFactor = 0.0f;
-        auto itFb = feedbacks.find(k.ch);
-        if (itFb != feedbacks.end()) {
-            double dt = currentPlayhead - (itFb->second.expireTime - 0.20);
-            if (dt >= 0.0 && dt < 0.22) {
-                hitFactor = 1.0f - static_cast<float>(dt / 0.22);
+
+        // Se a tecla está sendo ativamente segurada (hold progress):
+        char norm = static_cast<char>(std::toupper(static_cast<unsigned char>(k.ch)));
+        auto itHold = holdStates.find(norm);
+        bool isHolding = (heldKeys.count(norm) > 0 || (itHold != holdStates.end() && itHold->second == HoldState::Holding));
+        if (isHolding) {
+            hitFactor = 1.0f;
+        } else {
+            auto itFb = feedbacks.find(k.ch);
+            if (itFb != feedbacks.end() && itFb->second.type != JudgementType::Miss) {
+                double dt = currentPlayhead - (itFb->second.expireTime - 0.20);
+                if (dt >= 0.0 && dt < 0.22) {
+                    hitFactor = 1.0f - static_cast<float>(dt / 0.22);
+                }
             }
-        }
-        if (hitFactor <= 0.0f && keysAtHitLine.count(k.ch) > 0) {
-            hitFactor = 0.55f;
+            if (hitFactor <= 0.0f && keysAtHitLine.count(k.ch) > 0) {
+                hitFactor = 0.55f;
+            }
         }
 
         if (hitFactor > 0.0f) {

@@ -143,6 +143,26 @@ void App::reloadChart() {
     demoPlayer_.reset(0.0);
 
     songMode_->setJudgementCallback([this](const Judgement& j, const PlayableChordGroup& group) {
+        if (j.type != JudgementType::Miss) {
+            // Nota foi acertada: reproduz áudio no sintetizador!
+            for (size_t k = 0; k < group.midiNotes.size() && k < group.keys.size(); ++k) {
+                int midi = group.midiNotes[k];
+                char norm = static_cast<char>(std::toupper(static_cast<unsigned char>(group.keys[k])));
+                double dur = (k < group.durations.size()) ? group.durations[k] : 0.25;
+
+                soundingPitch_[norm] = midi;
+                synth_.noteOn(midi, 0.95f);
+
+                // Notas curtas ou em modo demo agendam o desligamento
+                // Notas longas sustentadas pelo jogador serão desligadas ao soltar a tecla (handleKeyUp)
+                if (dur <= 0.32 || demoMode_) {
+                    synth_.scheduleNoteOff(synth_.audioTime() + std::max(0.12, dur), midi);
+                }
+            }
+        } else {
+            // Nota perdida (Miss): MUTE! Silêncio na melodia
+        }
+
         for (char k : group.keys) {
             char norm = static_cast<char>(std::toupper(static_cast<unsigned char>(k)));
             double expireT = songMode_->playhead() + 0.20;
@@ -276,12 +296,7 @@ void App::handleKeyDown(SDL_Keycode sym) {
         } else {
             heldKeys_.insert(key);
             holdStates_[key] = HoldState::Holding;
-            int pitch = resolvePitchForKey(key);
             songMode_->onKeyDown(key);
-            if (pitch >= 0 && !autoMelody_) {
-                soundingPitch_[key] = pitch;
-                synth_.noteOn(pitch, 0.95f);
-            }
         }
     }
 }
@@ -353,7 +368,7 @@ void App::update(double rawDt) {
             }
         }
 
-        if (autoMelody_) {
+        if (autoMelody_ && !demoMode_) {
             const auto& pe = songMode_->chart().playableEvents;
             while (melodyCursor_ < pe.size() && pe[melodyCursor_].onset <= horizon) {
                 const size_t gi = melodyCursor_++;
@@ -413,7 +428,7 @@ void App::render() {
 
     if (currentMode_ == GameMode::SongMode) {
         highwayRenderer_.render(renderer_, fonts_, keyboardRenderer_, visNotes, keysAtHitLine,
-                                keyFeedbacks_, lookahead_, playhead);
+                                keyFeedbacks_, heldKeys_, holdStates_, lookahead_, playhead);
     }
 
     particles_.renderShockwaves(renderer_, ui::kHitY);

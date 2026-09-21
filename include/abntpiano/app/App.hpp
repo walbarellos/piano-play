@@ -97,7 +97,7 @@ private:
     double demoRestartTimer_ = 0.0;
 
     bool backingEnabled_ = true;
-    bool autoMelody_ = true;
+    bool autoMelody_ = false;
     size_t backingCursor_ = 0;
     size_t melodyCursor_ = 0;
     double songStartAudio_ = 0.0;

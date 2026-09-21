@@ -25,6 +25,7 @@ struct VisibleNote {
     std::vector<double> durations; // Duração das notas correspondentes
     std::vector<int> midiNotes;    // Pitch real para o synth (paralelo a keys)
     bool isJudged = false;
+    JudgementType judgement = JudgementType::Miss;
 };
 
 // Orquestrador do Song Mode (RF16, RF17, RF18, RF19, UC05)
@@ -79,6 +80,7 @@ private:
 
     // Rastreamento por grupo
     std::vector<bool> isGroupJudged_;
+    std::vector<JudgementType> groupJudgements_;
     std::vector<std::vector<KeyInputEvent>> groupInputs_;
     size_t unjudgedCount_ = 0;
     size_t firstUnjudgedIdx_ = 0;

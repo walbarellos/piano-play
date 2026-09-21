@@ -19,6 +19,8 @@ public:
                 const std::vector<VisibleNote>& visNotes,
                 const std::set<char>& keysAtHitLine,
                 const std::map<char, KeyFeedback>& feedbacks,
+                const std::set<char>& heldKeys,
+                const std::map<char, HoldState>& holdStates,
                 double lookahead,
                 double playhead) const;
 
@@ -26,9 +28,15 @@ private:
     void renderPlayfieldBackground(SDL_Renderer* ren, const std::vector<VisibleNote>& visNotes) const;
     void renderLanes(SDL_Renderer* ren) const;
     void renderNotes(SDL_Renderer* ren, const FontCollection& fonts,
-                     const std::vector<VisibleNote>& visNotes, double lookahead) const;
+                     const std::vector<VisibleNote>& visNotes,
+                     const std::set<char>& heldKeys,
+                     const std::map<char, HoldState>& holdStates,
+                     double lookahead, double playhead) const;
     void renderFeltRail(SDL_Renderer* ren, const std::set<char>& keysAtHitLine,
-                        const std::map<char, KeyFeedback>& feedbacks, double playhead) const;
+                        const std::map<char, KeyFeedback>& feedbacks,
+                        const std::set<char>& heldKeys,
+                        const std::map<char, HoldState>& holdStates,
+                        double playhead) const;
 };
 
 } // namespace abntpiano::ui
