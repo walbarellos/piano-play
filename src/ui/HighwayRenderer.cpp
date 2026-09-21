@@ -250,16 +250,16 @@ void HighwayRenderer::renderNotes(SDL_Renderer* ren, const FontCollection& fonts
                 float elapsed = (ttl <= 0.0) ? static_cast<float>(-ttl) : 0.0f;
                 float holdProgress = std::clamp(elapsed / static_cast<float>(dur), 0.0f, 1.0f);
 
-                // MUDANÇA DE COR CONFORME PRESSIONAMENTO:
-                // Se o jogador acertou e está segurando ativamente: cor vibrante e energética (luminous hold)
+                // MUDANÇA DE COR CONFORME PRESSIONAMENTO (GUITAR HERO STYLE):
                 SDL_Color topCol, botCol;
                 if (isHolding && ttl <= 0.0) {
-                    topCol = hslToRgb(hue, 90.0f, 65.0f);
+                    // Segurando ativamente: cores incandescentes de fogo / energia
+                    topCol = hslToRgb(hue, 95.0f, 65.0f);
                     botCol = hslToRgb(hue, 100.0f, 85.0f);
-                } else if (isMissed || (!isHolding && ttl <= -0.15)) {
-                    // Soltou prematuramente ou errou: escurece para indicar interrupção
-                    topCol = SDL_Color{50, 25, 30, 120};
-                    botCol = SDL_Color{85, 40, 50, 140};
+                } else if (isMissed || (!isHolding && ttl <= -0.10)) {
+                    // Soltou prematuramente ou errou: escurece para indicar interrupção imediata
+                    topCol = SDL_Color{42, 22, 28, 90};
+                    botCol = SDL_Color{60, 28, 34, 110};
                 } else {
                     // Descendo antes do impacto
                     topCol = k->isSharp ? hslToRgb(hue, 42.0f, 20.0f) : hslToRgb(hue, 46.0f, 46.0f);
@@ -269,40 +269,75 @@ void HighwayRenderer::renderNotes(SDL_Renderer* ren, const FontCollection& fonts
                 // Corpo da cápsula longa
                 renderCapsule(ren, x, top, w, h, topCol, botCol);
 
-                // Faixa central e textura de sustentação
-                if (h > 30.0f) {
-                    float cx = x + w / 2.0f;
-                    float stripeW = std::max(2.0f, w * 0.10f);
-                    renderCapsule(ren, cx - stripeW / 2.0f, top + 8.0f, stripeW, h - 16.0f,
-                                  {255, 255, 255, 36}, {255, 255, 255, 36});
+                // ── SE ESTÁ SENDO SEGURADA (GUITAR HERO SUSTAIN FIRE & SPARKS) ──
+                if (isHolding && ttl <= 0.0) {
+                    // 1. Núcleo elétrico incandescente de energia pura
+                    float coreW = std::max(3.0f, w * 0.36f);
+                    renderCapsule(ren, k->x - coreW / 2.0f, top + 4.0f, coreW, h - 8.0f,
+                                  {255, 255, 255, 240}, hslToRgb(hue, 100.0f, 88.0f, 255));
 
-                    SDL_Color hatchCol = isHolding ? hslToRgb(hue, 80.0f, 85.0f, 80) :
-                                                     (k->isSharp ? SDL_Color{10, 14, 22, 56} : hslToRgb(hue, 60.0f, 30.0f, 36));
-                    SDL_SetRenderDrawColor(ren, hatchCol.r, hatchCol.g, hatchCol.b, hatchCol.a);
-                    for (float hy = top + 14.0f; hy < y - 14.0f; hy += 9.0f) {
-                        SDL_RenderDrawLineF(ren, x + 3.0f, hy, x + w - 3.0f, hy + 6.0f);
+                    // 2. Bordas pegando fogo (Guitar Hero sustain flames): oscilação orgânica nas bordas esquerda e direita
+                    float flameTime = static_cast<float>(playhead) * 32.0f;
+                    int steps = static_cast<int>(h / 6.0f);
+                    float prevLy = top, prevLx = x;
+                    float prevRy = top, prevRx = x + w;
+
+                    for (int step = 1; step <= steps; step++) {
+                        float curY = top + static_cast<float>(step) * 6.0f;
+                        if (curY > y) curY = y;
+
+                        float w1 = std::sin(curY * 0.16f - flameTime);
+                        float w2 = std::cos(curY * 0.28f + flameTime * 1.3f);
+                        float curLx = x + (w1 + w2 * 0.5f) * 4.5f;
+                        float curRx = x + w + (std::cos(curY * 0.20f - flameTime * 1.1f) + w1 * 0.4f) * 4.5f;
+
+                        // Borda externa da chama (Laranja/Vermelho intenso)
+                        SDL_SetRenderDrawColor(ren, 255, 69, 0, 220); // #FF4500
+                        SDL_RenderDrawLineF(ren, prevLx - 2.0f, prevLy, curLx - 2.0f, curY);
+                        SDL_RenderDrawLineF(ren, prevRx + 2.0f, prevRy, curRx + 2.0f, curY);
+
+                        // Borda média da chama (Ouro/Amarelo brilhante)
+                        SDL_SetRenderDrawColor(ren, 255, 215, 0, 255); // #FFD700
+                        SDL_RenderDrawLineF(ren, prevLx, prevLy, curLx, curY);
+                        SDL_RenderDrawLineF(ren, prevRx, prevRy, curRx, curY);
+
+                        // Borda interna de calor (Branco quente)
+                        SDL_SetRenderDrawColor(ren, 255, 255, 230, 200);
+                        SDL_RenderDrawLineF(ren, prevLx + 1.5f, prevLy, curLx + 1.5f, curY);
+                        SDL_RenderDrawLineF(ren, prevRx - 1.5f, prevRy, curRx - 1.5f, curY);
+
+                        prevLy = curY; prevLx = curLx;
+                        prevRy = curY; prevRx = curRx;
                     }
-                }
 
-                // ── PREENCHIMENTO EM TEMPO REAL CONFORME O JOGADOR APERTA ──
-                if (isHolding && ttl <= 0.0 && holdProgress > 0.01f) {
-                    float fillHeight = h * holdProgress;
-                    float fillTop = y - fillHeight;
-                    float fillW = w * 0.76f;
-                    float fillX = k->x - fillW / 2.0f;
+                    // 3. Fagulhas e confetes estáticos nas bordas da sustentação
+                    for (int sp = 0; sp < 6; sp++) {
+                        float seed = static_cast<float>((static_cast<int>(k->midi * 41 + sp * 67 + playhead * 45.0) % 100)) / 100.0f;
+                        float sparkY = top + seed * h;
+                        float sparkX = (sp % 2 == 0) ? (x - 3.0f - seed * 7.0f) : (x + w + 3.0f + seed * 7.0f);
+                        SDL_Color sparkCol = (sp % 3 == 0) ? SDL_Color{255, 255, 240, 255} :
+                                             (sp % 3 == 1) ? SDL_Color{255, 215, 0, 255} : SDL_Color{255, 80, 20, 255};
+                        SDL_SetRenderDrawColor(ren, sparkCol.r, sparkCol.g, sparkCol.b, sparkCol.a);
+                        SDL_RenderDrawPointF(ren, sparkX, sparkY);
+                        SDL_RenderDrawPointF(ren, sparkX, sparkY - 1.0f);
+                        SDL_RenderDrawPointF(ren, sparkX + 1.0f, sparkY);
+                    }
 
-                    // Núcleo líquido elétrico de preenchimento
-                    SDL_Color coreTop{255, 255, 255, 240};
-                    SDL_Color coreBot = hslToRgb(hue, 100.0f, 90.0f, 255);
-                    renderCapsule(ren, fillX, fillTop, fillW, fillHeight, coreTop, coreBot);
-
-                    // Crista brilhante indicando a frente do preenchimento
-                    renderGlowDisc(ren, k->x, fillTop + 4.0f, fillW * 0.9f,
-                                   {255, 255, 255, 250}, hslToRgb(hue, 95.0f, 80.0f, 0));
-
-                    // Aura de sustentação contínua
-                    renderGlowDisc(ren, k->x, static_cast<float>(kHitY), w * 1.4f,
-                                   hslToRgb(hue, 100.0f, 80.0f, 140), hslToRgb(hue, 100.0f, 80.0f, 0));
+                    // 4. Erupção contínua de chamas no ponto de impacto (Guitar Hero Strike Fire at kHitY)
+                    renderGlowDisc(ren, k->x, static_cast<float>(kHitY), w * 1.8f,
+                                   {255, 140, 20, 240}, {255, 50, 0, 0});
+                    renderGlowDisc(ren, k->x, static_cast<float>(kHitY), w * 1.1f,
+                                   {255, 240, 100, 255}, {255, 140, 20, 0});
+                    renderGlowDisc(ren, k->x, static_cast<float>(kHitY), w * 0.55f,
+                                   {255, 255, 255, 255}, {255, 255, 200, 0});
+                } else if (!isMissed && (ttl > 0.0 || (ttl > -0.10 && !isHolding))) {
+                    // Faixa central decorativa padrão quando a nota está descendo
+                    if (h > 30.0f) {
+                        float cx = x + w / 2.0f;
+                        float stripeW = std::max(2.0f, w * 0.10f);
+                        renderCapsule(ren, cx - stripeW / 2.0f, top + 8.0f, stripeW, h - 16.0f,
+                                      {255, 255, 255, 36}, {255, 255, 255, 36});
+                    }
                 }
 
                 // Highlight radial de impacto na base da cápsula
@@ -389,8 +424,9 @@ void HighwayRenderer::renderFeltRail(SDL_Renderer* ren,
                     float py = static_cast<float>(kHitY) + std::sin(ang) * dist * 0.6f;
                     SDL_Color spCol = hslToRgb(hue, 70.0f, 82.0f, static_cast<Uint8>((hitFactor - 0.25f) * 1.3f * 255.0f));
                     SDL_SetRenderDrawColor(ren, spCol.r, spCol.g, spCol.b, spCol.a);
-                    SDL_Rect spRect{static_cast<int>(px - 1), static_cast<int>(py - 1), 3, 3};
-                    SDL_RenderFillRect(ren, &spRect);
+                    SDL_RenderDrawPointF(ren, px, py);
+                    SDL_RenderDrawPointF(ren, px + 0.5f, py);
+                    SDL_RenderDrawPointF(ren, px, py + 0.5f);
                 }
             }
         } else {

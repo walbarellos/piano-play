@@ -500,6 +500,30 @@ void App::update(double rawDt) {
         }
     }
 
+    // Gera faíscas e confetes de sustentação contínua estilo Guitar Hero
+    if (songMode_ && currentMode_ == GameMode::SongMode && !hasFinished_) {
+        for (const auto& vn : songMode_->getVisibleNotes(0.05)) {
+            if (vn.timeToHit <= 0.0) {
+                for (size_t kIdx = 0; kIdx < vn.keys.size(); ++kIdx) {
+                    double dur = (kIdx < vn.durations.size()) ? vn.durations[kIdx] : 0.25;
+                    if (dur > 0.32 && (vn.timeToHit + dur > 0.0)) {
+                        char normKey = static_cast<char>(std::toupper(static_cast<unsigned char>(vn.keys[kIdx])));
+                        auto itH = holdStates_.find(normKey);
+                        bool isHolding = (heldKeys_.count(normKey) > 0 ||
+                                         (itH != holdStates_.end() && itH->second == HoldState::Holding));
+                        if (isHolding) {
+                            const auto* pk = ui::getPianoKey(normKey);
+                            if (pk) {
+                                float hue = ui::pitchHue(pk->pc);
+                                particles_.spawnSustainEmbers(static_cast<int>(pk->x), ui::kHitY, hue, 2);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     particles_.update(rawDt);
 
     if (songMode_) {

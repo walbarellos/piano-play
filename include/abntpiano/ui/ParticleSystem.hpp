@@ -41,6 +41,7 @@ public:
     void spawnHit(JudgementType type, int keyCenterX, int hitY);
     void spawnFloatingText(const std::string& text, int centerX, int hitY, SDL_Color color);
     void spawnShockwave(int centerX, SDL_Color color);
+    void spawnSustainEmbers(int centerX, int hitY, float hue, int count = 2);
 
     void update(double dt);
     void renderShockwaves(SDL_Renderer* ren, int hitY) const;
