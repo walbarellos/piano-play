@@ -341,7 +341,6 @@ void App::update(double rawDt) {
             const auto& pe = songMode_->chart().playableEvents;
             while (melodyCursor_ < pe.size() && pe[melodyCursor_].onset <= horizon) {
                 const size_t gi = melodyCursor_++;
-                if (songMode_->isGroupJudged(gi)) continue;
                 const auto& g = pe[gi];
                 for (size_t k = 0; k < g.midiNotes.size() && k < g.durations.size(); ++k) {
                     synth_.scheduleNoteOn(audioTimeOf(g.onset), g.midiNotes[k], 0.92f);

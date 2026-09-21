@@ -8,17 +8,17 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Include directory
 include_directories(include)
 
-# Core library
+# Core library (Modularized by Architecture Layers)
 add_library(abntpiano_core STATIC
-    src/JudgementEngine.cpp
-    src/MidiImporter.cpp
-    src/ChartGenerator.cpp
-    src/SaveGameRepository.cpp
-    src/ScoringEngine.cpp
-    src/SongModeController.cpp
-    src/SynthEngine.cpp
-    src/SongCatalog.cpp
-    src/DemoPlayer.cpp
+    src/content/MidiImporter.cpp
+    src/content/SongCatalog.cpp
+    src/chart/ChartGenerator.cpp
+    src/game/JudgementEngine.cpp
+    src/game/ScoringEngine.cpp
+    src/game/SongModeController.cpp
+    src/game/DemoPlayer.cpp
+    src/audio/SynthEngine.cpp
+    src/persistence/SaveGameRepository.cpp
 )
 
 target_include_directories(abntpiano_core PUBLIC
@@ -68,8 +68,8 @@ pkg_check_modules(SDL2_TTF QUIET SDL2_ttf)
 
 add_executable(abntpiano_app
     src/main.cpp
-    src/App.cpp
-    src/AudioDevice.cpp
+    src/app/App.cpp
+    src/audio/AudioDevice.cpp
     src/ui/RenderTypes.cpp
     src/ui/ParticleSystem.cpp
     src/ui/KeyboardRenderer.cpp

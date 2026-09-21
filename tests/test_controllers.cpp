@@ -1,5 +1,7 @@
 #include "abntpiano/FreePlayController.hpp"
 #include "abntpiano/SongModeController.hpp"
+#include "abntpiano/game/DemoPlayer.hpp"
+#include "abntpiano/core/HoldState.hpp"
 #include <cassert>
 #include <iostream>
 
@@ -109,6 +111,61 @@ int main() {
         controller.update(1.0); // playhead vai para 3.5s (> 2.0s + 1.0s)
         assert(controller.state() == SongState::Finished);
         assert(finishedCalled);
+    }
+
+    std::cout << "[TEST] Validando DemoPlayer (Zero Misses, suporte a acordes, sem colisao de teclas)\n";
+    {
+        DifficultyConfig normalConfig{
+            .name = "Normal",
+            .hitWindow = {80.0, 130.0, 180.0, 180.0},
+            .maxChordSize = 3,
+            .noteDensityFactor = 1.0f,
+            .allowPartialChord = true,
+            .partialChordThreshold = 0.50f
+        };
+
+        Chart chart{
+            .songId = "demo_test_song",
+            .difficulty = normalConfig,
+            .playableEvents = {
+                // Acorde com 2 teclas
+                PlayableChordGroup{.onset = 0.5, .keys = {'Q', 'E'}, .durations = {0.4, 0.4}, .midiNotes = {60, 64}},
+                // Nota individual rápida logo após
+                PlayableChordGroup{.onset = 0.8, .keys = {'W'}, .durations = {0.2}, .midiNotes = {62}},
+                // Acorde com 3 teclas
+                PlayableChordGroup{.onset = 1.2, .keys = {'A', 'S', 'D'}, .durations = {0.5, 0.5, 0.5}, .midiNotes = {65, 67, 69}}
+            }
+        };
+
+        SongModeController controller(chart);
+        controller.start();
+
+        DemoPlayer demo;
+        demo.reset(0.0);
+
+        std::set<char> heldKeys;
+        std::map<char, HoldState> holdStates;
+
+        int missCount = 0;
+        int hitCount = 0;
+        controller.setJudgementCallback([&](const Judgement& j, const PlayableChordGroup&) {
+            if (j.type == JudgementType::Miss) {
+                missCount++;
+            } else {
+                hitCount++;
+            }
+        });
+
+        // Simula passagem de frames de 0 a 2.0s em passos de 0.016s (~60 FPS)
+        for (double t = 0.0; t <= 2.0; t += 0.016) {
+            demo.update(t, controller, heldKeys, holdStates);
+        }
+
+        assert(missCount == 0);
+        assert(hitCount == 3);
+        assert(controller.scoringEngine().maxCombo() == 3);
+        assert(controller.scoringEngine().missCount() == 0);
+        std::cout << "  Hits registrados: " << hitCount << ", Misses: " << missCount << " (PERFEITO!)\n";
     }
 
     std::cout << "\n>>> TODOS OS TESTES DOS CONTROLLERS PASSARAM! <<<\n";

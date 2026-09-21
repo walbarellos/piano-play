@@ -162,6 +162,40 @@ void SongModeController::onKeyDown(char key) {
     }
 }
 
+void SongModeController::triggerDemoHit(size_t groupIndex, JudgementType type, double hitTimestamp) {
+    if (state_ != SongState::Playing) return;
+    if (groupIndex >= chart_.playableEvents.size()) return;
+    if (isGroupJudged_[groupIndex]) return;
+
+    const auto& group = chart_.playableEvents[groupIndex];
+    size_t keysTotal = group.keys.size();
+
+    for (char k : group.keys) {
+        char norm = static_cast<char>(std::toupper(static_cast<unsigned char>(k)));
+        groupInputs_[groupIndex].push_back(KeyInputEvent{norm, hitTimestamp});
+    }
+
+    double deltaMs = (hitTimestamp - group.onset) * 1000.0;
+    Judgement judgement{
+        .type = type,
+        .deltaMs = deltaMs,
+        .keysHit = keysTotal,
+        .keysTotal = keysTotal
+    };
+
+    isGroupJudged_[groupIndex] = true;
+    if (unjudgedCount_ > 0) --unjudgedCount_;
+    scoring_.registerJudgement(judgement);
+
+    if (judgementCb_) {
+        judgementCb_(judgement, group);
+    }
+
+    while (firstUnjudgedIdx_ < chart_.playableEvents.size() && isGroupJudged_[firstUnjudgedIdx_]) {
+        ++firstUnjudgedIdx_;
+    }
+}
+
 std::vector<VisibleNote> SongModeController::getVisibleNotes(double lookaheadSeconds) const {
     std::vector<VisibleNote> visible;
     for (size_t i = 0; i < chart_.playableEvents.size(); ++i) {

@@ -56,10 +56,21 @@ void DemoPlayer::update(double targetPlayheadTime,
         }
 
         if (!songMode.isGroupJudged(cursor_)) {
+            JudgementType judgeType = JudgementType::Perfect;
+            double absDeltaMs = std::abs(hitTime - g.onset) * 1000.0;
+            if (absDeltaMs <= hw.perfect) {
+                judgeType = JudgementType::Perfect;
+            } else if (absDeltaMs <= hw.great) {
+                judgeType = JudgementType::Great;
+            } else {
+                judgeType = JudgementType::Good;
+            }
+
+            songMode.triggerDemoHit(cursor_, judgeType, hitTime);
+
             for (size_t k = 0; k < g.keys.size(); ++k) {
-                char key = g.keys[k];
+                char key = static_cast<char>(std::toupper(static_cast<unsigned char>(g.keys[k])));
                 double dur = (k < g.durations.size()) ? g.durations[k] : 0.3;
-                songMode.onKeyDown(key);
                 heldKeys.insert(key);
                 holdStates[key] = HoldState::Holding;
                 scheduledReleases_[key] = songMode.playhead() + std::max(dur - 0.03, 0.06);
