@@ -75,6 +75,7 @@ add_executable(abntpiano_app
     src/ui/KeyboardRenderer.cpp
     src/ui/HighwayRenderer.cpp
     src/ui/HudRenderer.cpp
+    src/ui/MenuRenderer.cpp
     src/ui/ResultsOverlay.cpp
 )
 target_include_directories(abntpiano_app PRIVATE ${SDL2_INCLUDE_DIRS} ${SDL2_TTF_INCLUDE_DIRS})

@@ -24,6 +24,7 @@ public:
     bool addSong(const std::string& filePath, const std::string& title, const std::string& composer);
 
     size_t size() const { return songs_.size(); }
+    size_t songCount() const { return songs_.size(); }
     bool empty() const { return songs_.empty(); }
 
     const Song& getSong(size_t index) const;

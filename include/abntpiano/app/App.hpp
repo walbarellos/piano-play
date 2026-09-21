@@ -11,6 +11,7 @@
 #include "abntpiano/ui/HighwayRenderer.hpp"
 #include "abntpiano/ui/HudRenderer.hpp"
 #include "abntpiano/ui/KeyboardRenderer.hpp"
+#include "abntpiano/ui/MenuRenderer.hpp"
 #include "abntpiano/ui/ParticleSystem.hpp"
 #include "abntpiano/ui/RenderTypes.hpp"
 #include "abntpiano/ui/ResultsOverlay.hpp"
@@ -24,8 +25,9 @@
 namespace abntpiano {
 
 enum class GameMode {
-    FreePlay,
-    SongMode
+    MainMenu,
+    SongMode,
+    FreePlay
 };
 
 class App {
@@ -82,19 +84,22 @@ private:
     ui::HighwayRenderer highwayRenderer_;
     ui::KeyboardRenderer keyboardRenderer_;
     ui::HudRenderer hudRenderer_;
+    ui::MenuRenderer menuRenderer_;
     ui::ResultsOverlay resultsOverlay_;
     ui::ParticleSystem particles_;
 
     // Estado da Aplicação
-    GameMode currentMode_ = GameMode::SongMode;
+    GameMode currentMode_ = GameMode::MainMenu;
     bool running_ = true;
     size_t activeSongIndex_ = 0;
     int currentDifficulty_ = 1;
     double lookahead_ = 3.5;
     double playbackSpeed_ = 1.0;
 
-    bool demoMode_ = true;
-    double demoRestartTimer_ = 0.0;
+    bool teacherMode_ = false;
+    double teacherRestartTimer_ = 0.0;
+    int mouseX_ = 0;
+    int mouseY_ = 0;
 
     bool backingEnabled_ = true;
     bool autoMelody_ = false;

@@ -59,7 +59,7 @@ bool App::init() {
     }
 
     window_ = SDL_CreateWindow(
-        "ABNT Piano  [F2-F8] Musicas | [1-3] Dificuldade | [F1] Free Play | [F12] Demo | [?] Atalhos",
+        "ABNT Piano - Simulador de Concerto e Treinador Musical",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         ui::kScreenWidth, ui::kScreenHeight,
         SDL_WINDOW_SHOWN
@@ -82,6 +82,8 @@ bool App::init() {
     }
 
     reloadChart();
+    synth_.allNotesOff();
+    synth_.clearSchedule();
     return true;
 }
 
@@ -134,7 +136,7 @@ void App::reloadChart() {
     Chart chart = chartGen_.generateChart(getActiveSong(), getActiveDiff());
     songMode_ = std::make_unique<SongModeController>(chart);
     hasFinished_ = false;
-    demoRestartTimer_ = 0.0;
+    teacherRestartTimer_ = 0.0;
     keyFeedbacks_.clear();
     holdStates_.clear();
     heldKeys_.clear();
@@ -153,9 +155,9 @@ void App::reloadChart() {
                 soundingPitch_[norm] = midi;
                 synth_.noteOn(midi, 0.95f);
 
-                // Notas curtas ou em modo demo agendam o desligamento
+                // Notas curtas ou em modo professor agendam o desligamento
                 // Notas longas sustentadas pelo jogador serão desligadas ao soltar a tecla (handleKeyUp)
-                if (dur <= 0.32 || demoMode_) {
+                if (dur <= 0.32 || teacherMode_) {
                     synth_.scheduleNoteOff(synth_.audioTime() + std::max(0.12, dur), midi);
                 }
             }
@@ -204,7 +206,7 @@ void App::reloadChart() {
         synth_.releaseAllNotes();
         heldKeys_.clear();
         holdStates_.clear();
-        demoRestartTimer_ = 0.0;
+        teacherRestartTimer_ = 0.0;
         auto rec = summary.toScoreRecord(songMode_->chart().songId + "_" + getActiveDiff().name,
                                          currentGame_.profile.id);
         currentGame_.scores.push_back(rec);
@@ -216,18 +218,88 @@ void App::reloadChart() {
 }
 
 void App::handleKeyDown(SDL_Keycode sym) {
-    if (sym == SDLK_SLASH || sym == SDLK_QUESTION) {
-        showShortcutsOverlay_ = !showShortcutsOverlay_;
+    if (showShortcutsOverlay_) {
+        if (sym == SDLK_SLASH || sym == SDLK_QUESTION || sym == SDLK_ESCAPE) {
+            showShortcutsOverlay_ = false;
+            return;
+        }
+    } else if (sym == SDLK_SLASH || sym == SDLK_QUESTION) {
+        showShortcutsOverlay_ = true;
         return;
     }
 
-    if (sym == SDLK_ESCAPE) {
-        if (showShortcutsOverlay_) {
-            showShortcutsOverlay_ = false;
-        } else {
+    // ─── 1. MODO MENU PRINCIPAL ──────────────────────────────────────────
+    if (currentMode_ == GameMode::MainMenu) {
+        if (sym == SDLK_ESCAPE) {
             running_ = false;
+            return;
         }
-    } else if (sym == SDLK_F1) {
+        if (sym == SDLK_RETURN || sym == SDLK_KP_ENTER) {
+            currentMode_ = GameMode::SongMode;
+            reloadChart();
+            return;
+        }
+        if (sym == SDLK_UP) {
+            if (activeSongIndex_ > 0) {
+                activeSongIndex_--;
+            } else if (catalog_.songCount() > 0) {
+                activeSongIndex_ = catalog_.songCount() - 1;
+            }
+            return;
+        }
+        if (sym == SDLK_DOWN) {
+            if (catalog_.songCount() > 0) {
+                activeSongIndex_ = (activeSongIndex_ + 1) % catalog_.songCount();
+            }
+            return;
+        }
+        if (sym == SDLK_1) {
+            currentDifficulty_ = 1;
+            return;
+        }
+        if (sym == SDLK_2) {
+            currentDifficulty_ = 2;
+            return;
+        }
+        if (sym == SDLK_3) {
+            currentDifficulty_ = 3;
+            return;
+        }
+        if (sym == SDLK_t || sym == SDLK_F12) {
+            teacherMode_ = !teacherMode_;
+            return;
+        }
+        if (sym >= SDLK_F2 && sym <= SDLK_F6) {
+            size_t idx = static_cast<size_t>(sym - SDLK_F2);
+            if (idx < catalog_.songCount()) {
+                activeSongIndex_ = idx;
+            }
+            return;
+        }
+        if (sym == SDLK_F1) {
+            currentMode_ = GameMode::FreePlay;
+            synth_.allNotesOff();
+            heldKeys_.clear();
+            holdStates_.clear();
+            soundingPitch_.clear();
+            return;
+        }
+        return;
+    }
+
+    // ─── 2. EM JOGO (SongMode ou FreePlay) ────────────────────────────────
+    if (sym == SDLK_ESCAPE) {
+        // Tecla ESC retorna ao Menu Principal
+        currentMode_ = GameMode::MainMenu;
+        synth_.allNotesOff();
+        synth_.clearSchedule();
+        heldKeys_.clear();
+        holdStates_.clear();
+        soundingPitch_.clear();
+        return;
+    }
+
+    if (sym == SDLK_F1) {
         currentMode_ = GameMode::FreePlay;
         synth_.allNotesOff();
         heldKeys_.clear();
@@ -240,20 +312,22 @@ void App::handleKeyDown(SDL_Keycode sym) {
     } else if (sym == SDLK_F10) {
         autoMelody_ = !autoMelody_;
         synth_.clearSchedule();
-        resyncAudioClock(songMode_->playhead(), 0.0);
+        if (songMode_) resyncAudioClock(songMode_->playhead(), 0.0);
     } else if (sym == SDLK_F11) {
         backingEnabled_ = !backingEnabled_;
         synth_.clearSchedule();
-        resyncAudioClock(songMode_->playhead(), 0.0);
-    } else if (sym == SDLK_F12) {
-        demoMode_ = !demoMode_;
+        if (songMode_) resyncAudioClock(songMode_->playhead(), 0.0);
+    } else if (sym == SDLK_F12 || sym == SDLK_t) {
+        teacherMode_ = !teacherMode_;
         hasFinished_ = false;
         synth_.allNotesOff();
-        songMode_->restart();
-        heldKeys_.clear();
-        holdStates_.clear();
-        soundingPitch_.clear();
-        resyncAudioClock(0.0, 0.35);
+        if (songMode_) {
+            songMode_->restart();
+            heldKeys_.clear();
+            holdStates_.clear();
+            soundingPitch_.clear();
+            resyncAudioClock(0.0, 0.35);
+        }
     } else if (sym == SDLK_TAB) {
         currentMode_ = GameMode::SongMode;
         activeSongIndex_ = catalog_.nextIndex(activeSongIndex_);
@@ -270,16 +344,16 @@ void App::handleKeyDown(SDL_Keycode sym) {
         lookahead_ = std::max(1.5, lookahead_ - 0.5);
     } else if (sym == SDLK_LEFTBRACKET) {
         playbackSpeed_ = std::max(0.5, playbackSpeed_ - 0.25);
-        resyncAudioClock(songMode_->playhead(), 0.0);
+        if (songMode_) resyncAudioClock(songMode_->playhead(), 0.0);
     } else if (sym == SDLK_RIGHTBRACKET) {
         playbackSpeed_ = std::min(1.5, playbackSpeed_ + 0.25);
-        resyncAudioClock(songMode_->playhead(), 0.0);
+        if (songMode_) resyncAudioClock(songMode_->playhead(), 0.0);
     } else if (sym == SDLK_RETURN || sym == SDLK_KP_ENTER) {
         hasFinished_ = false;
         synth_.allNotesOff();
         heldKeys_.clear();
         holdStates_.clear();
-        songMode_->restart();
+        if (songMode_) songMode_->restart();
         soundingPitch_.clear();
         resyncAudioClock(0.0, 0.35);
     } else if (sym == SDLK_SPACE) {
@@ -293,7 +367,7 @@ void App::handleKeyDown(SDL_Keycode sym) {
         char key = static_cast<char>('A' + (sym - SDLK_a));
         if (currentMode_ == GameMode::FreePlay) {
             freePlay_.onKeyDown(key);
-        } else {
+        } else if (currentMode_ == GameMode::SongMode && songMode_) {
             heldKeys_.insert(key);
             holdStates_[key] = HoldState::Holding;
             songMode_->onKeyDown(key);
@@ -327,12 +401,38 @@ void App::handleKeyUp(SDL_Keycode sym) {
 void App::handleEvent(const SDL_Event& ev) {
     if (ev.type == SDL_QUIT) {
         running_ = false;
+    } else if (ev.type == SDL_MOUSEMOTION) {
+        mouseX_ = ev.motion.x;
+        mouseY_ = ev.motion.y;
     } else if (ev.type == SDL_MOUSEBUTTONDOWN) {
         if (ev.button.button == SDL_BUTTON_LEFT) {
-            if (ev.button.x <= 130 && ev.button.y <= ui::kHudHeight) {
-                showShortcutsOverlay_ = !showShortcutsOverlay_;
-            } else if (showShortcutsOverlay_) {
+            if (showShortcutsOverlay_) {
                 showShortcutsOverlay_ = false;
+                return;
+            }
+
+            if (currentMode_ == GameMode::MainMenu) {
+                ui::MenuAction act = menuRenderer_.handleMouseClick(
+                    ev.button.x, ev.button.y,
+                    activeSongIndex_, currentDifficulty_, teacherMode_,
+                    catalog_.songCount()
+                );
+                if (act == ui::MenuAction::StartSong) {
+                    currentMode_ = GameMode::SongMode;
+                    reloadChart();
+                } else if (act == ui::MenuAction::StartFreePlay) {
+                    currentMode_ = GameMode::FreePlay;
+                    synth_.allNotesOff();
+                    heldKeys_.clear();
+                    holdStates_.clear();
+                    soundingPitch_.clear();
+                } else if (act == ui::MenuAction::ToggleShortcuts) {
+                    showShortcutsOverlay_ = true;
+                }
+            } else {
+                if (ev.button.x <= 130 && ev.button.y <= ui::kHudHeight) {
+                    showShortcutsOverlay_ = !showShortcutsOverlay_;
+                }
             }
         }
     } else if (ev.type == SDL_KEYDOWN && !ev.key.repeat) {
@@ -343,12 +443,17 @@ void App::handleEvent(const SDL_Event& ev) {
 }
 
 void App::update(double rawDt) {
+    if (currentMode_ == GameMode::MainMenu) {
+        particles_.update(rawDt);
+        return;
+    }
+
     if (currentMode_ == GameMode::SongMode && songMode_) {
         double target = (synth_.audioTime() - songStartAudio_) * songSpeed_;
         double delta = target - songMode_->playhead();
         if (delta > 0.0) songMode_->update(delta);
 
-        if (demoMode_ && !hasFinished_) {
+        if (teacherMode_ && !hasFinished_) {
             demoPlayer_.update(songMode_->playhead(), *songMode_, heldKeys_, holdStates_);
         }
 
@@ -368,7 +473,7 @@ void App::update(double rawDt) {
             }
         }
 
-        if (autoMelody_ && !demoMode_) {
+        if (autoMelody_ && !teacherMode_) {
             const auto& pe = songMode_->chart().playableEvents;
             while (melodyCursor_ < pe.size() && pe[melodyCursor_].onset <= horizon) {
                 const size_t gi = melodyCursor_++;
@@ -381,10 +486,10 @@ void App::update(double rawDt) {
         }
     }
 
-    if (demoMode_ && currentMode_ == GameMode::SongMode && hasFinished_) {
-        demoRestartTimer_ += rawDt;
-        if (demoRestartTimer_ >= 2.5) {
-            demoRestartTimer_ = 0.0;
+    if (teacherMode_ && currentMode_ == GameMode::SongMode && hasFinished_) {
+        teacherRestartTimer_ += rawDt;
+        if (teacherRestartTimer_ >= 2.5) {
+            teacherRestartTimer_ = 0.0;
             hasFinished_ = false;
             synth_.allNotesOff();
             songMode_->restart();
@@ -410,6 +515,16 @@ void App::update(double rawDt) {
 void App::render() {
     SDL_SetRenderDrawColor(renderer_, 7, 5, 11, 255); // #07050B
     SDL_RenderClear(renderer_);
+
+    if (currentMode_ == GameMode::MainMenu) {
+        menuRenderer_.render(renderer_, fonts_, catalog_, activeSongIndex_,
+                             currentDifficulty_, teacherMode_, mouseX_, mouseY_);
+        if (showShortcutsOverlay_) {
+            hudRenderer_.renderShortcutsOverlay(renderer_, fonts_);
+        }
+        SDL_RenderPresent(renderer_);
+        return;
+    }
 
     std::vector<VisibleNote> visNotes;
     std::set<char> keysAtHitLine;
@@ -447,7 +562,7 @@ void App::render() {
     const ScoringEngine& sc = songMode_ ? songMode_->scoringEngine() : dummyScoring;
     hudRenderer_.render(renderer_, fonts_, getActiveSong(), currentDifficulty_, lookahead_,
                         sc, playhead, totalDuration, currentMode_ == GameMode::FreePlay,
-                        demoMode_, currentPhrase_, phraseExpireTime_, showShortcutsOverlay_);
+                        teacherMode_, currentPhrase_, phraseExpireTime_, showShortcutsOverlay_);
 
     if (hasFinished_) {
         resultsOverlay_.render(renderer_, fonts_, finalSummary_);

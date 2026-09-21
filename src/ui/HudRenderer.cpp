@@ -17,7 +17,7 @@ void HudRenderer::render(SDL_Renderer* ren,
                          double playhead,
                          double totalSongDuration,
                          bool isFreePlay,
-                         bool isDemoMode,
+                         bool isTeacherMode,
                          const std::string& comboPhrase,
                          double phraseExpireTime,
                          bool showShortcutsOverlay) const {
@@ -30,13 +30,13 @@ void HudRenderer::render(SDL_Renderer* ren,
     SDL_RenderDrawLine(ren, 0, kHudHeight - 1, kScreenWidth, kHudHeight - 1);
 
     if (isFreePlay) {
-        renderText(ren, fonts.medium, "♪  FREE PLAY — Toque Livre", 26, 20, {239, 230, 214, 255});
+        renderText(ren, fonts.medium, "FREE PLAY - Toque Livre", 26, 20, {239, 230, 214, 255});
         renderText(ren, fonts.small, "Pressione [?] para atalhos", 26, 48, {110, 104, 128, 255});
         if (showShortcutsOverlay) renderShortcutsOverlay(ren, fonts);
         return;
     }
 
-    renderSongInfo(ren, fonts, currentSong, currentDifficulty, isDemoMode);
+    renderSongInfo(ren, fonts, currentSong, currentDifficulty, isTeacherMode);
     renderStats(ren, fonts, scoring);
     renderProgressBar(ren, playhead, totalSongDuration);
 
@@ -44,7 +44,7 @@ void HudRenderer::render(SDL_Renderer* ren,
     if (!comboPhrase.empty() && phraseExpireTime > playhead) {
         float t = static_cast<float>(std::min(1.0, phraseExpireTime - playhead));
         Uint8 a = static_cast<Uint8>(t * 255.0f);
-        renderText(ren, fonts.small, "★ " + comboPhrase + " ★", kScreenWidth / 2, 16, {199, 154, 74, a}, true);
+        renderText(ren, fonts.small, "* " + comboPhrase + " *", kScreenWidth / 2, 16, {199, 154, 74, a}, true);
     }
 
     if (showShortcutsOverlay) {
@@ -53,7 +53,7 @@ void HudRenderer::render(SDL_Renderer* ren,
 }
 
 void HudRenderer::renderSongInfo(SDL_Renderer* ren, const FontCollection& fonts, const Song& song,
-                                 int difficulty, bool isDemoMode) const {
+                                 int difficulty, bool isTeacherMode) const {
     // Título da música
     renderText(ren, fonts.medium, song.title, 26, 14, {239, 230, 214, 255}); // #EFE6D6
 
@@ -76,20 +76,20 @@ void HudRenderer::renderSongInfo(SDL_Renderer* ren, const FontCollection& fonts,
     renderText(ren, fonts.tiny, diffLabel, pillX + pillW / 2, pillY + pillH / 2,
                {199, 154, 74, 255}, true); // #C79A4A
 
-    // Indicador DEMO
-    if (isDemoMode) {
-        int demoX = pillX + pillW + 12;
-        int demoW = 105;
-        int demoH = 20;
-        SDL_Color demoCol{155, 47, 176, 255}; // #9B2FB0
-        renderCapsule(ren, static_cast<float>(demoX), static_cast<float>(pillY),
-                      static_cast<float>(demoW), static_cast<float>(demoH),
-                      {60, 20, 75, 200}, {60, 20, 75, 200});
-        renderCapsuleOutline(ren, static_cast<float>(demoX), static_cast<float>(pillY),
-                             static_cast<float>(demoW), static_cast<float>(demoH),
-                             demoCol);
-        renderText(ren, fonts.tiny, "◉ DEMO [F12]", demoX + demoW / 2, pillY + demoH / 2,
-                   {255, 220, 255, 255}, true);
+    // Indicador PROFESSOR (TEACHER)
+    if (isTeacherMode) {
+        int badgeX = pillX + pillW + 12;
+        int badgeW = 135;
+        int badgeH = 20;
+        SDL_Color badgeCol{199, 154, 74, 255}; // Dourado
+        renderCapsule(ren, static_cast<float>(badgeX), static_cast<float>(pillY),
+                      static_cast<float>(badgeW), static_cast<float>(badgeH),
+                      {85, 24, 110, 220}, {55, 14, 75, 220});
+        renderCapsuleOutline(ren, static_cast<float>(badgeX), static_cast<float>(pillY),
+                             static_cast<float>(badgeW), static_cast<float>(badgeH),
+                             badgeCol);
+        renderText(ren, fonts.tiny, "PROFESSOR [F12]", badgeX + badgeW / 2, pillY + badgeH / 2,
+                   {255, 250, 240, 255}, true);
     }
 
     // Indicador discreto de atalhos
@@ -192,13 +192,13 @@ void HudRenderer::renderShortcutsOverlay(SDL_Renderer* ren, const FontCollection
         {"F2 – F6",       "Escolher obra completa do repertório"},
         {"TAB",           "Alternar para a próxima música"},
         {"1 / 2 / 3",     "Dificuldade: Fácil / Normal / Difícil"},
-        {"F12",           "Ligar/desligar modo DEMO"},
+        {"T / F12",       "Modo Professor (ON: assiste / OFF: toca)"},
         {"- / +",         "Ajustar velocidade de queda das notas"},
         {"[ / ]",         "Ajustar andamento de reprodução"},
         {"F10 / F11",     "Alternar Guia de Melodia / Acompanhamento"},
         {"Enter",         "Reiniciar peça do início"},
         {"F1",            "Modo Free Play (tocar livremente)"},
-        {"ESC",           "Sair do jogo / Fechar menu"}
+        {"ESC",           "Voltar ao Menu Principal"}
     };
 
     int startY = cardY + 68;

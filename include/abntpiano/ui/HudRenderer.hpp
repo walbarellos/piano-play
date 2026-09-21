@@ -20,7 +20,7 @@ public:
                 double playhead,
                 double totalSongDuration,
                 bool isFreePlay,
-                bool isDemoMode,
+                bool isTeacherMode,
                 const std::string& comboPhrase,
                 double phraseExpireTime,
                 bool showShortcutsOverlay = false) const;
@@ -29,7 +29,7 @@ public:
 
 private:
     void renderSongInfo(SDL_Renderer* ren, const FontCollection& fonts, const Song& song,
-                        int difficulty, bool isDemoMode) const;
+                        int difficulty, bool isTeacherMode) const;
     void renderStats(SDL_Renderer* ren, const FontCollection& fonts, const ScoringEngine& scoring) const;
     void renderProgressBar(SDL_Renderer* ren, double playhead, double totalDuration) const;
 };
