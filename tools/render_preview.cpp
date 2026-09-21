@@ -14,8 +14,6 @@ using namespace abntpiano;
 
 namespace {
 
-struct Ev { double t; int midi; float vel; bool on; };
-
 void writeWav(const std::string& path, const std::vector<float>& mono, int sampleRate) {
     std::ofstream f(path, std::ios::binary);
     auto u32 = [&](uint32_t v) { f.write(reinterpret_cast<const char*>(&v), 4); };
@@ -52,43 +50,34 @@ int main(int argc, char** argv) {
     };
     Chart chart = ChartGenerator().generateChart(res.song, diff);
 
-    std::vector<Ev> evs;
+    // Agenda tudo em tempo absoluto de áudio: mesmo caminho do jogo.
+    SynthEngine synth(sr);
     for (const auto& g : chart.playableEvents) {
+        if (g.onset < offset || g.onset > offset + length) continue;
         for (size_t i = 0; i < g.midiNotes.size(); ++i) {
-            evs.push_back({g.onset, g.midiNotes[i], 0.95f, true});
-            evs.push_back({g.onset + std::max(0.10, g.durations[i]), g.midiNotes[i], 0.0f, false});
+            synth.scheduleNoteOn (g.onset - offset, g.midiNotes[i], 0.92f);
+            synth.scheduleNoteOff(g.onset - offset + std::max(0.12, g.durations[i]), g.midiNotes[i]);
         }
     }
     for (const auto& b : chart.backingNotes) {
-        evs.push_back({b.onset, b.midiNote, std::clamp(b.velocity / 127.0f, 0.05f, 1.0f) * 0.60f, true});
-        evs.push_back({b.onset + std::max(0.08, b.duration), b.midiNote, 0.0f, false});
+        if (b.onset < offset || b.onset > offset + length) continue;
+        float vel = std::clamp(b.velocity / 127.0f, 0.05f, 1.0f) * 0.55f;
+        synth.scheduleNoteOn (b.onset - offset, b.midiNote, vel);
+        synth.scheduleNoteOff(b.onset - offset + std::max(0.08, b.duration), b.midiNote);
     }
-    std::sort(evs.begin(), evs.end(), [](const Ev& a, const Ev& b) { return a.t < b.t; });
 
-    SynthEngine synth(sr);
+    const size_t block = 512;
+    std::vector<float> buf(block);
     std::vector<float> out;
     out.reserve(static_cast<size_t>(length * sr));
-
-    const size_t block = 64;
-    std::vector<float> buf(block);
-    size_t cursor = 0;
-    while (cursor < evs.size() && evs[cursor].t < offset) ++cursor;
-
-    double t = offset;
-    const double dt = static_cast<double>(block) / sr;
-    while (t < offset + length) {
-        while (cursor < evs.size() && evs[cursor].t <= t) {
-            const auto& e = evs[cursor++];
-            if (e.on) synth.noteOn(e.midi, e.vel); else synth.noteOff(e.midi);
-        }
+    for (size_t n = 0; n < static_cast<size_t>(length * sr); n += block) {
         synth.render(buf.data(), block);
         out.insert(out.end(), buf.begin(), buf.end());
-        t += dt;
     }
 
     writeWav(argv[2], out, sr);
-    std::printf("%s -> %s  (%.1fs, %zu eventos, melodia=%zu, backing=%zu)\n",
-                argv[1], argv[2], length, evs.size(),
+    std::printf("%s -> %s  (%.1fs, melodia=%zu, backing=%zu)\n",
+                argv[1], argv[2], length,
                 chart.playableEvents.size(), chart.backingNotes.size());
     return 0;
 }

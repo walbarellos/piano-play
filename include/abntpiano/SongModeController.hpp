@@ -58,6 +58,11 @@ public:
     // Getters de estado
     SongState state() const { return state_; }
     double playhead() const { return playhead_; }
+
+    // Consulta se um grupo já foi julgado (usado pelo guia melódico automático)
+    bool isGroupJudged(size_t index) const {
+        return index < isGroupJudged_.size() && isGroupJudged_[index];
+    }
     const Chart& chart() const { return chart_; }
     const ScoringEngine& scoringEngine() const { return scoring_; }
 
